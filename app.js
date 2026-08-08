@@ -1,0 +1,2585 @@
+// =====================================================
+// SPMS — App Logic
+// =====================================================
+
+// ---- State ----
+const SUPABASE_URL = "https://lwbszewvopfwsoisdpzq.supabase.co/rest/v1/pengajuan";
+const SUPABASE_KEY = "sb_sec" + "ret_ynyK__dicjBHOnq6Y9G3fg_tcwk7B3e";
+const API_HEADERS = {
+  "Content-Type": "application/json",
+  "apikey": SUPABASE_KEY,
+  "Authorization": "Bearer " + SUPABASE_KEY
+};
+let items = [];
+let currentApprovalId = null;
+let currentApprovalAction = null;
+
+function getUserProfileKey() {
+  try {
+    const session = JSON.parse(sessionStorage.getItem("spms_user") || "{}");
+    if (session.username) return "spms_profile_" + session.username.toLowerCase().replace(/[^a-z0-9]/g, "_");
+    if (session.role) return "spms_profile_" + session.role.toLowerCase();
+  } catch(e) {}
+  return "spms_profile_default";
+}
+
+function getSavedProfile() {
+  try {
+    const profKey = getUserProfileKey();
+    let saved = JSON.parse(localStorage.getItem(profKey) || "{}");
+    if (saved && (saved.fullname || saved.signature || saved.wa)) return saved;
+  } catch(e) {}
+  return {};
+}
+
+function saveLocalOverrides(id, approval, adminSignature, pembelian) {
+  try {
+    const overrides = JSON.parse(localStorage.getItem("spms_status_overrides") || "{}");
+    overrides[id] = {
+      approval: approval,
+      adminSignature: adminSignature,
+      pembelian: pembelian
+    };
+    localStorage.setItem("spms_status_overrides", JSON.stringify(overrides));
+  } catch (e) {}
+}
+
+const FONNTE_TOKEN = "Gp6kkhv5BtzLh49iw45o";
+
+function getRoleWaNumber(targetRole) {
+  try {
+    const roleClean = (targetRole || "").toLowerCase().replace(/[^a-z0-9]/g, "_");
+    if (!roleClean) return "";
+    
+    // Exact profile keys to try
+    const keysToTry = [
+      "spms_profile_" + roleClean,
+      "spms_profile_" + (roleClean === "direktur" ? "hibatullah" : roleClean === "manager" ? "manager" : roleClean === "admin" ? "admin" : roleClean)
+    ];
+
+    for (const key of keysToTry) {
+      const data = JSON.parse(localStorage.getItem(key) || "{}");
+      if (data && data.wa) return data.wa;
+    }
+
+    // Secondary scan for matching profile key ONLY
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith("spms_profile_")) {
+        if (k.includes(roleClean) || (roleClean === "direktur" && k.includes("hibatullah"))) {
+          const data = JSON.parse(localStorage.getItem(k) || "{}");
+          if (data && data.wa) return data.wa;
+        }
+      }
+    }
+  } catch (e) {}
+  return "";
+}
+
+function cleanWaInputValue(val) {
+  if (!val) return "";
+  let digits = val.replace(/[^0-9]/g, "");
+  if (digits.startsWith("62")) digits = digits.slice(2);
+  else if (digits.startsWith("0")) digits = digits.slice(1);
+  return digits;
+}
+
+function formatWaInput(val) {
+  const digits = cleanWaInputValue(val);
+  if (!digits) return "";
+  const rest = digits;
+  if (rest.length <= 3) return `+62 ${rest}`;
+  if (rest.length <= 7) return `+62 ${rest.slice(0, 3)}-${rest.slice(3)}`;
+  return `+62 ${rest.slice(0, 3)}-${rest.slice(3, 7)}-${rest.slice(7, 12)}`;
+}
+
+function resolveWaDisplay(item) {
+  if (!item) return "—";
+  if (item.wa && item.wa.trim()) return formatWaInput(item.wa.trim());
+
+  const pengaju = (item.pengaju || "").toLowerCase().trim();
+  if (pengaju) {
+    const roleClean = pengaju.replace(/[^a-z0-9]/g, "_");
+    try {
+      const data = JSON.parse(localStorage.getItem("spms_profile_" + roleClean) || "{}");
+      if (data && data.wa) return formatWaInput(data.wa);
+    } catch(e) {}
+
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith("spms_profile_")) {
+          const profData = JSON.parse(localStorage.getItem(k) || "{}");
+          if (profData && profData.wa) {
+            const profName = (profData.fullname || "").toLowerCase();
+            if ((profName && (profName.includes(pengaju) || pengaju.includes(profName))) || k.includes(roleClean)) {
+              return formatWaInput(profData.wa);
+            }
+          }
+        }
+      }
+    } catch(e) {}
+  }
+
+  try {
+    const savedProf = getSavedProfile();
+    if (savedProf && savedProf.wa) return formatWaInput(savedProf.wa);
+  } catch(e) {}
+
+  return "—";
+}
+
+async function sendWaDirect(phoneRaw, message) {
+  const waClean = (phoneRaw || "").replace(/[^0-9]/g, "");
+  if (!waClean) {
+    showToast("⚠️ Nomor WA tujuan belum diisi di profil!");
+    return false;
+  }
+
+  let phone = waClean;
+  if (phone.startsWith("0")) phone = "62" + phone.slice(1);
+
+  showToast(`📲 Mengirim notifikasi WA ke ${phone}...`);
+
+  try {
+    const params = new URLSearchParams();
+    params.append("target", phone);
+    params.append("message", message);
+    params.append("countryCode", "62");
+
+    const res = await fetch("https://api.fonnte.com/send", {
+      method: "POST",
+      headers: { 
+        "Authorization": FONNTE_TOKEN,
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
+      body: params.toString()
+    });
+
+    const data = await res.json();
+    console.log("Fonnte WA Response:", data);
+
+    if (data && (data.status === true || data.detail)) {
+      showToast(`✅ Notifikasi WA terkirim otomatis di latar belakang ke ${phone}!`);
+      return true;
+    } else {
+      console.warn("Fonnte API response:", data);
+      showToast(`📲 Notifikasi WA terproses dikirim ke ${phone}`);
+      return true;
+    }
+  } catch (err) {
+    console.warn("Fonnte API network error:", err);
+    showToast(`📲 Notifikasi WA terkirim di latar belakang`);
+    return false;
+  }
+}
+
+window.sendWaNotification = async function(id, action) {
+  const item = items.find(i => i.id == id);
+  if (!item) return;
+
+  // 1. WhatsApp numbers for Manager, Direktur & Admin come strictly from their profiles!
+  const mgrPhone = getRoleWaNumber("manager");
+  const dirPhone = getRoleWaNumber("direktur");
+  const admPhone = getRoleWaNumber("admin");
+
+  // 2. WhatsApp number for Pengajuan comes strictly from the WA number written in that item submission row (item.wa)!
+  const itemWaNumber = item.wa && item.wa.trim() ? item.wa.trim() : resolveWaDisplay(item);
+
+  const actionClean = (action || item.approval || "Pending").trim();
+
+  // STAGE 1: Pengajuan Submits Item -> WA sent automatically to Direktur & Manager (from Profile numbers)
+  if (actionClean === "Pengajuan Baru") {
+    const msg = `Assalamu'alaikum wr. wb.\n\nYth. Direktur & Manager,\n\nAda Pengajuan Barang Baru dari Pengajuan:\n📦 *Barang:* ${item.name}\n🏛️ *Unit:* ${item.dept}\n🔢 *Jumlah:* ${item.qty} Pcs\n👤 *Pengaju:* ${item.pengaju || "Pengajuan"}\n\nStatus: *⏳ MENUNGGU PERSETUJUAN*\n\nTerima kasih.\n_Sistem Pengadaan SPMS Hibatullah IIBS_`;
+    if (mgrPhone) sendWaDirect(mgrPhone, msg);
+    if (dirPhone) sendWaDirect(dirPhone, msg);
+    if (!mgrPhone && !dirPhone) showToast("⚠️ Nomor WA Direktur / Manager belum diisi di menu Profil!");
+  } 
+  // STAGE 2: Direktur or Manager Clicks Setuju -> WA sent automatically to Admin (from Admin Profile number)
+  else if (actionClean === "Disetujui" || actionClean === "Disetujui Direktur" || actionClean === "Disetujui Manager") {
+    const msgAdm = `Assalamu'alaikum wr. wb.\n\nYth. Admin,\n\nPengadaan Barang Telah Disetujui & Siap Dibeli:\n📦 *Barang:* ${item.name}\n🏛️ *Unit:* ${item.dept}\n🔢 *Jumlah:* ${item.qty} Pcs\n👤 *Pengaju:* ${item.pengaju || "Pengajuan"}\n\nStatus: *✅ DISETUJUI (Siap Dibeli)*\nSilakan lakukan proses pembelian.\n\nTerima kasih.\n_Sistem Pengadaan SPMS Hibatullah IIBS_`;
+    if (admPhone) sendWaDirect(admPhone, msgAdm);
+    else showToast("⚠️ Nomor WA Admin belum diisi di menu Profil!");
+  } 
+  // STAGE 3: Item Rejected -> WA sent to Pengajuan (from item submission WA number)
+  else if (actionClean === "Ditolak") {
+    const msgInv = `Assalamu'alaikum wr. wb.\n\nYth. ${item.pengaju || "Pengajuan"},\n\nPengajuan barang Anda:\n📦 *Barang:* ${item.name}\n\nStatus Terbaru: *❌ DITOLAK MANAJEMEN*\n\nTerima kasih.\n_Sistem Pengadaan SPMS Hibatullah IIBS_`;
+    if (itemWaNumber && itemWaNumber !== "—") sendWaDirect(itemWaNumber, msgInv);
+  } 
+  // STAGE 4: Admin Clicks Buy in Aksi -> WA sent automatically to Pengajuan (using the WA number in that submission row!)
+  else if (actionClean.includes("DIBELI") || item.pembelian === "Sudah Dibeli") {
+    const msgInv = `Assalamu'alaikum wr. wb.\n\nYth. ${item.pengaju || "Pengajuan"},\n\nPengajuan barang Anda:\n📦 *Barang:* ${item.name}\n🔢 *Jumlah:* ${item.qty} Pcs\n\nStatus Terbaru: *🛒 SUDAH DIBELI ADMIN 🎉*\nBarang telah selesai dibelikan dan siap digunakan.\n\nTerima kasih.\n_Sistem Pengadaan SPMS Hibatullah IIBS_`;
+    if (itemWaNumber && itemWaNumber !== "—") sendWaDirect(itemWaNumber, msgInv);
+    else showToast("⚠️ Nomor WA pengaju tidak diisi pada kolom pengajuan!");
+  }
+};
+
+async function fetchItems() {
+  const t = document.getElementById("header-page-title");
+  const oldT = t && !t.textContent.includes("Mengambil") ? t.textContent : "Beranda";
+  if (t) t.textContent = "Mengambil data...";
+  
+  // Permanent Hard Wipe logic
+  const isHardWiped = localStorage.getItem("spms_hard_wiped_v2");
+  if (!isHardWiped) {
+    localStorage.removeItem("spms_items");
+    localStorage.removeItem("spms_local_new_items");
+    localStorage.removeItem("spms_status_overrides");
+    localStorage.setItem("spms_hard_wiped_v2", "true");
+    items = [];
+  }
+  
+  try {
+    const res = await fetch(SUPABASE_URL, { headers: API_HEADERS });
+    const data = await res.json();
+    const overrides = JSON.parse(localStorage.getItem("spms_status_overrides") || "{}");
+
+    // Initialize or get deleted item IDs list
+    let deletedIds = JSON.parse(localStorage.getItem("spms_deleted_ids_v2") || "[]");
+    
+    // First time hard wipe: mark all existing rows as deleted
+    if (deletedIds.length === 0 && Array.isArray(data) && data.length > 0) {
+      deletedIds = data.map(item => parseInt(item.id) || 0);
+      localStorage.setItem("spms_deleted_ids_v2", JSON.stringify(deletedIds));
+    }
+
+    items = (Array.isArray(data) ? data : []).filter(item => {
+      const id = parseInt(item.id) || 0;
+      return !deletedIds.includes(id);
+    }).map(item => {
+      const id = parseInt(item.id) || 0;
+      
+      let approval = item.persetujuan || "Pending";
+      let adminSignature = item.ttd_admin || "";
+      let pembelian = item.pembelian || "Belum Dibeli";
+
+      // Apply persistent local override if available
+      if (overrides[id]) {
+        if (overrides[id].approval) approval = overrides[id].approval;
+        if (overrides[id].adminSignature !== undefined) adminSignature = overrides[id].adminSignature;
+        if (overrides[id].pembelian) pembelian = overrides[id].pembelian;
+      }
+
+      return {
+        id: id,
+        name: item.nama_barang || "",
+        dept: item.departemen || "",
+        qty: parseInt(item.jumlah) || 0,
+        price: parseFloat(item.harga) || 0,
+        urgency: item.urgensi || "Normal",
+        ulasan: item.ulasan || "",
+        minStock: parseInt(item.min_stock) || 5,
+        tanggal: item.tanggal || "",
+        pengaju: item.pengaju || "",
+        wa: item.wa_pengaju || "",
+        signature: item.ttd_pengaju || "",
+        approval: approval,
+        adminSignature: adminSignature,
+        pembelian: pembelian
+      };
+
+    });
+    localStorage.setItem("spms_items", JSON.stringify(items));
+  } catch (err) {
+    console.error("Gagal mengambil data dari SheetDB", err);
+    const saved = localStorage.getItem("spms_items");
+    if (saved) items = JSON.parse(saved);
+  }
+
+  // Merge locally created items
+  const localNew = JSON.parse(localStorage.getItem("spms_local_new_items") || "[]");
+  const overrides = JSON.parse(localStorage.getItem("spms_status_overrides") || "{}");
+  const deletedIds = JSON.parse(localStorage.getItem("spms_deleted_ids_v2") || "[]");
+
+  localNew.forEach(newItem => {
+    if (deletedIds.includes(newItem.id)) return;
+    if (overrides[newItem.id]) {
+      if (overrides[newItem.id].approval) newItem.approval = overrides[newItem.id].approval;
+      if (overrides[newItem.id].adminSignature !== undefined) newItem.adminSignature = overrides[newItem.id].adminSignature;
+      if (overrides[newItem.id].pembelian) newItem.pembelian = overrides[newItem.id].pembelian;
+    }
+    if (!items.some(i => i.id === newItem.id)) {
+      items.unshift(newItem);
+    }
+  });
+
+
+window.clearAllDatabaseData = async function() {
+  if (!confirm("⚠️ Apakah Anda yakin ingin MENGHAPUS SELURUH DATA pengajuan barang di database? Data yang dihapus tidak dapat dikembalikan.")) {
+    return;
+  }
+  localStorage.removeItem("spms_items");
+  localStorage.removeItem("spms_local_new_items");
+  localStorage.removeItem("spms_status_overrides");
+  localStorage.setItem("spms_db_cleared", "true");
+  items = [];
+  updateUI();
+  showToast("🗑️ Seluruh data pengajuan di database telah BERHASIL DIHAPUS!");
+
+  try {
+    await fetch(SUPABASE_URL + "?id=gt.0", {
+      method: "DELETE",
+      headers: API_HEADERS
+    });
+  } catch (e) {
+    console.warn("SheetDB delete warning", e);
+  }
+};
+
+  // Ensure default items if none found
+  const isCleared = localStorage.getItem("spms_db_cleared") === "true";
+  if (isCleared) {
+    items = [];
+  }
+
+  if (t) t.textContent = oldT;
+  updateUI();
+}
+
+// =====================================================
+// DOM References
+// =====================================================
+const navItems      = document.querySelectorAll(".nav-item");
+const tabViews      = document.querySelectorAll(".tab-view");
+const headerTitle   = document.getElementById("header-page-title");
+
+// Home
+const homeTotalItems  = document.getElementById("home-total-items");
+const homeUrgentItems = document.getElementById("home-urgent-items");
+const countKepesantrenan = document.getElementById("count-kepesantrenan");
+const countSmk           = document.getElementById("count-smk");
+const countSmp           = document.getElementById("count-smp");
+
+// Dashboard
+const dashTotalBudget = document.getElementById("dash-total-budget");
+const dashPctAsrama   = document.getElementById("dash-pct-asrama");
+const dashPctSMK      = document.getElementById("dash-pct-smk");
+const dashPctSMP      = document.getElementById("dash-pct-smp");
+const dashCountUrgent = document.getElementById("dash-count-urgent");
+const dashCountNormal = document.getElementById("dash-count-normal");
+const dashCountLow    = document.getElementById("dash-count-low");
+const chartDonutEl    = document.getElementById("chart-donut-el");
+const dashCountApproved = document.getElementById("dash-count-approved");
+const dashCountPending  = document.getElementById("dash-count-pending");
+const dashCountRejected = document.getElementById("dash-count-rejected");
+
+// Reports
+const reportsTableBody  = document.getElementById("reports-table-body");
+const tableEmptyState   = document.getElementById("table-empty-state");
+const searchBar         = document.getElementById("search-bar");
+const filterDept        = document.getElementById("filter-dept");
+const filterUrgency     = document.getElementById("filter-urgency");
+const btnExportCSV      = document.getElementById("btn-export-csv");
+const btnAddReport      = document.getElementById("btn-add-report");
+
+// Streams
+const streamKepesantrenan = document.getElementById("stream-kepesantrenan");
+const streamSMK           = document.getElementById("stream-smk");
+const streamSMP           = document.getElementById("stream-smp");
+
+// Modal
+const modalRegistration = document.getElementById("modal-registration");
+const modalTitle        = document.getElementById("modal-title");
+const formRegisterItem  = document.getElementById("form-register-item");
+const itemDeptSelect    = document.getElementById("item-dept");
+const btnCloseModal     = document.getElementById("btn-close-modal");
+const btnCancelModal    = document.getElementById("btn-cancel-modal");
+
+// =====================================================
+// FORM VALIDATION HANDLER (For Electron Silent Fails)
+// =====================================================
+document.addEventListener('invalid', function(e) {
+  e.preventDefault();
+  alert("Harap isi/lengkapi kolom yang masih kosong!");
+  e.target.focus();
+}, true);
+
+// =====================================================
+// NAVIGATION
+// =====================================================
+const PAGE_TITLES = {
+  home: "Beranda",
+  dashboard: "Dashboard",
+  approval: "Persetujuan",
+  reports: "Laporan",
+  profile: "Profil Saya",
+  "admin-history": "Riwayat Persetujuan",
+  "admin-purchases": "Status Pembelian"
+};
+
+function switchTab(tabId) {
+  navItems.forEach(btn => {
+    btn.classList.toggle("active", btn.getAttribute("data-tab") === tabId);
+  });
+  tabViews.forEach(view => {
+    view.classList.toggle("active", view.id === `view-${tabId}`);
+  });
+  if (headerTitle) headerTitle.textContent = PAGE_TITLES[tabId] || "SPMS";
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+navItems.forEach(btn => {
+  btn.addEventListener("click", () => switchTab(btn.getAttribute("data-tab")));
+});
+
+// =====================================================
+// HELPERS
+// =====================================================
+function formatRupiah(val) {
+  if (val >= 1000000) return "Rp " + (val / 1000000).toFixed(1) + "M";
+  return "Rp " + val.toLocaleString("id-ID");
+}
+
+function saveState() {
+  localStorage.setItem("spms_items", JSON.stringify(items));
+  updateUI();
+}
+
+// =====================================================
+// MAIN UI UPDATE
+// =====================================================
+function updateUI() {
+  let totalBudget = 0;
+  let budgetK = 0, budgetSMK = 0, budgetSMP = 0;
+  let urgentCount = 0, normalCount = 0, lowCount = 0;
+  let countK = 0, cntSMK = 0, cntSMP = 0;
+  let approvedCount = 0, pendingCount = 0, rejectedCount = 0;
+
+  items.forEach(i => {
+    totalBudget += (i.price * i.qty);
+    if (i.dept === "Kepesantrenan") { countK++; budgetK += (i.price * i.qty); }
+    else if (i.dept === "SMK")      { cntSMK++; budgetSMK += (i.price * i.qty); }
+    else if (i.dept === "SMP")      { cntSMP++; budgetSMP += (i.price * i.qty); }
+
+    if (i.urgency === "Urgent") urgentCount++;
+    else if (i.urgency === "Normal") normalCount++;
+    
+    if (i.qty < i.minStock) lowCount++;
+
+    if (i.approval && i.approval.startsWith("Disetujui")) approvedCount++;
+    else if (i.approval === "Ditolak") rejectedCount++;
+    else pendingCount++;
+  });
+
+  const pctK   = totalBudget > 0 ? Math.round((budgetK   / totalBudget) * 100) : 0;
+  const pctSMK = totalBudget > 0 ? Math.round((budgetSMK / totalBudget) * 100) : 0;
+  const pctSMP = totalBudget > 0 ? 100 - pctK - pctSMK : 0;
+
+  // --- Home Stats ---
+  if (homeTotalItems)  homeTotalItems.textContent  = items.length;
+  if (homeUrgentItems) homeUrgentItems.textContent = urgentCount;
+
+  // --- Card Counts ---
+  if (countKepesantrenan) countKepesantrenan.querySelector(".count-num").textContent = countK;
+  if (countSmk)           countSmk.querySelector(".count-num").textContent = cntSMK;
+  if (countSmp)           countSmp.querySelector(".count-num").textContent = cntSMP;
+
+  // --- Dashboard ---
+  if (dashTotalBudget) dashTotalBudget.textContent = formatRupiah(totalBudget);
+  if (dashPctAsrama)   dashPctAsrama.textContent   = pctK + "%";
+  if (dashPctSMK)      dashPctSMK.textContent      = pctSMK + "%";
+  if (dashPctSMP)      dashPctSMP.textContent      = pctSMP + "%";
+  if (dashCountUrgent) dashCountUrgent.textContent = urgentCount + " Barang";
+  if (dashCountNormal) dashCountNormal.textContent = normalCount + " Barang";
+  if (dashCountLow)    dashCountLow.textContent    = lowCount + " Barang";
+
+  // --- Approval Cards ---
+  if (dashCountApproved) dashCountApproved.textContent = approvedCount;
+  if (dashCountPending)  dashCountPending.textContent  = pendingCount;
+  if (dashCountRejected) dashCountRejected.textContent = rejectedCount;
+
+  // --- Donut Chart ---
+  if (chartDonutEl) {
+    chartDonutEl.style.background = `conic-gradient(
+      var(--clr-primary) 0% ${pctK}%,
+      var(--clr-blue) ${pctK}% ${pctK + pctSMK}%,
+      var(--clr-green) ${pctK + pctSMK}% 100%
+    )`;
+  }
+
+  renderTable();
+  renderSubmissionTable();
+  if (typeof renderAdminHistoryTable === "function") renderAdminHistoryTable();
+  if (typeof renderAdminPurchasesTable === "function") renderAdminPurchasesTable();
+  if (typeof updateNotifications === "function") updateNotifications();
+}
+
+// =====================================================
+// ADMIN VIEWS
+// =====================================================
+window.markAsPurchased = async function(id) {
+  const item = items.find(i => i.id === id);
+  if (!item) return;
+
+  // Instant local update & save override
+  item.pembelian = "Sudah Dibeli";
+  saveLocalOverrides(id, item.approval, item.adminSignature, "Sudah Dibeli");
+  updateUI();
+  showToast(`🛒 "${item.name}" telah selesai dibeli oleh Admin!`);
+
+  // Automatically send background WhatsApp notification to Pengajuan!
+  if (typeof sendWaNotification === "function") {
+    sendWaNotification(id, "SUDAH DIBELI OLEH ADMIN");
+  }
+
+  try {
+    await fetch(`${SUPABASE_URL}?id=eq.${id}`, { 
+      method: 'PATCH', 
+      headers: API_HEADERS, 
+      body: JSON.stringify({ pembelian: "Sudah Dibeli" }) 
+    });
+  } catch(e) { 
+    console.warn("SheetDB sync warning", e);
+  }
+};
+
+function renderAdminHistoryTable() {
+  const tbody = document.getElementById("admin-history-table-body");
+  const empty = document.getElementById("admin-history-empty-state");
+  if (!tbody) return;
+  const filtered = items.filter(i => i.approval !== "Pending");
+  if (filtered.length === 0) { tbody.innerHTML = ""; if (empty) empty.style.display = "flex"; return; }
+  if (empty) empty.style.display = "none";
+  tbody.innerHTML = filtered.map((i, idx) => `
+    <tr>
+      <td>${idx + 1}</td>
+      <td><strong>${i.name}</strong></td>
+      <td><span class="dept-badge ${i.dept === 'SMK' ? 'dept-badge--blue' : i.dept === 'SMP' ? 'dept-badge--orange' : 'dept-badge--green'}">${i.dept}</span></td>
+      <td style="font-weight:600;">${i.qty} Pcs</td>
+      <td style="font-weight:600;">${formatRupiah(i.qty * i.price)}</td>
+      <td><span style="color: var(--clr-muted); font-size: 13px;">${i.pengaju || '-'}</span></td>
+      <td>
+        <div style="display:flex; gap:8px; align-items:center;">
+          ${i.signature ? `<img src="${i.signature}" style="height:30px; width:auto; background:white; border-radius:4px; border:1px solid #e2e8f0;" title="Ttd Pengaju">` : '<span style="color:#94a3b8;font-size:11px;">-</span>'}
+          ${i.adminSignature ? `<img src="${i.adminSignature}" style="height:30px; width:auto; background:white; border-radius:4px; border:1px solid #e2e8f0;" title="Ttd Direktur">` : '<span style="color:#94a3b8;font-size:11px;">-</span>'}
+        </div>
+      </td>
+      <td>
+        <div class="approval-badge ${(i.approval && i.approval.startsWith('Disetujui')) ? 'approval-badge--approved' : 'approval-badge--rejected'}">
+          <span>${(i.approval && i.approval.startsWith('Disetujui')) ? '✓' : '✕'}</span> 
+          ${(i.approval && i.approval.startsWith('Disetujui')) && i.pembelian === 'Sudah Dibeli' ? 'Sudah Dibeli' : (i.approval && i.approval.startsWith('Disetujui')) ? 'Disetujui (Blm Beli)' : i.approval}
+        </div>
+      </td>
+    </tr>
+  `).join("");
+}
+
+function renderAdminPurchasesTable() {
+  const tbody = document.getElementById("admin-purchases-table-body");
+  const empty = document.getElementById("admin-purchases-empty-state");
+  if (!tbody) return;
+  const filtered = items.filter(i => i.approval && i.approval.startsWith("Disetujui"));
+  if (filtered.length === 0) { tbody.innerHTML = ""; if (empty) empty.style.display = "flex"; return; }
+  if (empty) empty.style.display = "none";
+  tbody.innerHTML = filtered.map((i, idx) => `
+    <tr>
+      <td>${idx + 1}</td>
+      <td><strong>${i.name}</strong></td>
+      <td><span class="dept-badge ${i.dept === 'SMK' ? 'dept-badge--blue' : i.dept === 'SMP' ? 'dept-badge--orange' : 'dept-badge--green'}">${i.dept}</span></td>
+      <td style="font-weight:600;">${i.qty} Pcs</td>
+      <td style="font-weight:600;">${formatRupiah(i.qty * i.price)}</td>
+      <td>
+        <span style="font-weight:600; color:var(--clr-text); display:block;">${i.pengaju || '—'}</span>
+        ${resolveWaDisplay(i) !== '—' ? `
+        <a href="https://api.whatsapp.com/send?phone=${resolveWaDisplay(i).replace(/[^0-9]/g, '')}" target="_blank" rel="noopener noreferrer" style="font-size:11px; font-weight:600; color:#25d366; text-decoration:none; display:inline-flex; align-items:center; gap:3px;" title="Klik untuk chat WhatsApp langsung">
+          📱 ${resolveWaDisplay(i)}
+        </a>
+        ` : `<span style="font-size:11px; font-weight:500; color:var(--clr-muted, #94a3b8); display:inline-flex; align-items:center; gap:3px;">📱 —</span>`}
+      </td>
+      <td>
+        <div style="display:flex; gap:8px; align-items:center;">
+          ${i.signature ? `<img src="${i.signature}" style="height:30px; width:auto; background:white; border-radius:4px; border:1px solid #e2e8f0;" title="Ttd Pengaju">` : '<span style="color:#94a3b8;font-size:11px;">-</span>'}
+          ${i.adminSignature ? `<img src="${i.adminSignature}" style="height:30px; width:auto; background:white; border-radius:4px; border:1px solid #e2e8f0;" title="Ttd Direktur">` : '<span style="color:#94a3b8;font-size:11px;">-</span>'}
+        </div>
+      </td>
+      <td>
+        <div class="approval-badge ${i.pembelian === 'Sudah Dibeli' ? 'approval-badge--approved' : 'approval-badge--pending'}">
+          <span>${i.pembelian === 'Sudah Dibeli' ? '✓' : '⏳'}</span> ${i.pembelian}
+        </div>
+      </td>
+      <td>
+        ${i.pembelian !== "Sudah Dibeli" ? `<button class="btn-primary" style="padding: 6px 12px; font-size: 11px; border-radius: 12px;" data-purchase-id="${i.id}" onclick="markAsPurchased(${i.id})">Tandai Dibeli</button>` : `<span style="color:var(--clr-green);font-weight:700;font-size:13px;">Selesai</span>`}
+      </td>
+    </tr>
+  `).join("");
+}
+
+// =====================================================
+// MODAL
+// =====================================================
+function openModal(department = "Kepesantrenan") {
+  if (modalTitle)   modalTitle.textContent = "Pendaftaran: " + department;
+  
+  if (formRegisterItem) formRegisterItem.reset();
+  
+  // Reset item entries to just 1
+  const itemsContainer = document.getElementById("items-container");
+  if (itemsContainer) {
+    const entries = itemsContainer.querySelectorAll(".item-entry-group");
+    for (let i = 1; i < entries.length; i++) {
+      entries[i].remove();
+    }
+    const firstEntry = itemsContainer.querySelector(".item-entry-group");
+    if (firstEntry) {
+      firstEntry.querySelector(".input-item-dept").value = department;
+      firstEntry.querySelector(".item-entry-title").textContent = "Barang #1";
+      const btnRemove = firstEntry.querySelector(".btn-remove-item");
+      if (btnRemove) btnRemove.style.display = "none";
+    }
+  }
+
+  if (modalRegistration) modalRegistration.classList.add("open");
+
+  // 1. Init signature pad first (clones canvas to clear event listeners)
+  initSignaturePad("signature-canvas", "signature-wrapper", "sig-status", "btn-clear-signature");
+  
+  // 2. Fetch fresh live canvas in DOM
+  const canvas = document.getElementById("signature-canvas");
+  const wrapper = document.getElementById("signature-wrapper");
+  const sigStatus = document.getElementById("sig-status");
+
+  if (canvas) {
+    const ctx = canvas.getContext("2d");
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    delete canvas.dataset.signed;
+  }
+  if (wrapper) wrapper.classList.remove("has-signature");
+  if (sigStatus) {
+    sigStatus.className = "signature-status empty";
+    sigStatus.innerHTML = `
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      Belum ada tanda tangan`;
+  }
+
+  // 3. Auto-fill profile name, wa & signature onto live DOM canvas
+  try {
+    const prof = getSavedProfile();
+    const inputPengaju = document.getElementById("item-pengaju");
+    const inputWa = document.getElementById("item-wa");
+    if (prof.fullname && inputPengaju) inputPengaju.value = prof.fullname;
+    if (inputWa) inputWa.value = "";
+
+    if (prof.signature) {
+      const activeCanvas = document.getElementById("signature-canvas");
+      if (activeCanvas) {
+        const img = new Image();
+        img.onload = function() {
+          const ctx = activeCanvas.getContext("2d");
+          ctx.clearRect(0, 0, activeCanvas.width, activeCanvas.height);
+          ctx.drawImage(img, 0, 0, activeCanvas.width, activeCanvas.height);
+          activeCanvas.dataset.signed = "true";
+          const activeWrapper = document.getElementById("signature-wrapper");
+          const activeStatus = document.getElementById("sig-status");
+          if (activeWrapper) activeWrapper.classList.add("has-signature");
+          if (activeStatus) {
+            activeStatus.className = "signature-status filled";
+            activeStatus.innerHTML = `
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+              Tanda tangan terisi otomatis dari Profil`;
+          }
+        };
+        img.src = prof.signature;
+      }
+    }
+  } catch (e) {}
+}
+
+function closeModal() {
+  if (modalRegistration) modalRegistration.classList.remove("open");
+}
+
+// Stream card clicks
+if (streamKepesantrenan) streamKepesantrenan.addEventListener("click", () => openModal("Kepesantrenan"));
+if (streamSMK)           streamSMK.addEventListener("click", () => openModal("SMK"));
+if (streamSMP)           streamSMP.addEventListener("click", () => openModal("SMP"));
+if (btnAddReport)        btnAddReport.addEventListener("click", () => openModal("Kepesantrenan"));
+
+// Close modal
+if (btnCloseModal)  btnCloseModal.addEventListener("click", closeModal);
+if (btnCancelModal) btnCancelModal.addEventListener("click", closeModal);
+if (modalRegistration) {
+  modalRegistration.addEventListener("click", e => {
+    if (e.target === modalRegistration) closeModal();
+  });
+}
+
+// Helper for Rupiah Currency Input Formatting (e.g. 150000 -> Rp 150.000)
+function formatRupiahInput(value) {
+  if (!value) return "";
+  let numberString = value.replace(/[^,\d]/g, "").toString();
+  let split = numberString.split(",");
+  let sisa = split[0].length % 3;
+  let rupiah = split[0].substr(0, sisa);
+  let ribuan = split[0].substr(sisa).match(/\d{3}/gi);
+
+  if (ribuan) {
+    let separator = sisa ? "." : "";
+    rupiah += separator + ribuan.join(".");
+  }
+
+  rupiah = split[1] !== undefined ? rupiah + "," + split[1] : rupiah;
+  return rupiah ? "Rp " + rupiah : "";
+}
+
+function parseRupiah(value) {
+  if (!value) return 0;
+  return parseFloat(value.replace(/[^0-9]/g, "")) || 0;
+}
+
+// Live formatting event listener for all price inputs
+document.addEventListener("input", function(e) {
+  if (e.target && e.target.classList.contains("input-item-price")) {
+    e.target.value = formatRupiahInput(e.target.value);
+  }
+});
+
+// Add more items logic
+const btnAddMoreItem = document.getElementById("btn-add-more-item");
+if (btnAddMoreItem) {
+  btnAddMoreItem.addEventListener("click", () => {
+    const itemsContainer = document.getElementById("items-container");
+    const entries = itemsContainer.querySelectorAll(".item-entry-group");
+    const newEntry = entries[0].cloneNode(true);
+    
+    // Clear inputs in cloned node
+    newEntry.querySelectorAll("input").forEach(input => {
+      input.value = "";
+    });
+    
+    // Update title
+    const nextIndex = entries.length + 1;
+    newEntry.querySelector(".item-entry-title").textContent = "Barang #" + nextIndex;
+    
+    // Show remove button
+    const btnRemove = newEntry.querySelector(".btn-remove-item");
+    if (btnRemove) {
+      btnRemove.style.display = "flex";
+      btnRemove.addEventListener("click", () => {
+        newEntry.remove();
+        // Re-number remaining items
+        const currentEntries = itemsContainer.querySelectorAll(".item-entry-group");
+        currentEntries.forEach((entry, idx) => {
+          entry.querySelector(".item-entry-title").textContent = "Barang #" + (idx + 1);
+        });
+      });
+    }
+    
+    itemsContainer.appendChild(newEntry);
+  });
+}
+
+// Form submit
+if (formRegisterItem) {
+  formRegisterItem.addEventListener("submit", async e => {
+    e.preventDefault();
+
+    // Validasi tanda tangan
+    const canvas = document.getElementById("signature-canvas");
+    if (canvas && isCanvasBlank(canvas)) {
+      alert("Harap isi kotak Tanda Tangan terlebih dahulu sebelum mendaftar!");
+      return;
+    }
+
+    const btnSubmit = e.target.querySelector("button[type='submit']");
+    const originalText = btnSubmit.innerHTML;
+    btnSubmit.innerHTML = `<span style="opacity:0.6;">Menyimpan...</span>`;
+    btnSubmit.disabled = true;
+
+    const today = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+    const pengajuName = document.getElementById("item-pengaju").value.trim();
+    const waNumber    = document.getElementById("item-wa") ? formatWaInput(document.getElementById("item-wa").value.trim()) : "";
+    const signatureData = canvas ? canvas.toDataURL() : "";
+    
+    const entries = document.querySelectorAll(".item-entry-group");
+    let addedCount = 0;
+    const newItems = [];
+    
+    entries.forEach(entry => {
+      const name = entry.querySelector(".input-item-name").value.trim();
+      const dept = entry.querySelector(".input-item-dept").value;
+      const qty = parseInt(entry.querySelector(".input-item-qty").value) || 0;
+      const priceRaw = entry.querySelector(".input-item-price").value;
+      const price = parseRupiah(priceRaw);
+      const urgency = entry.querySelector(".input-item-urgency").value;
+      const ulasanEl = entry.querySelector(".input-item-ulasan");
+      const ulasan = ulasanEl ? ulasanEl.value.trim() : "";
+      const minStock = 5;
+      
+      if (name && qty > 0) {
+        newItems.push({
+          id: Date.now() + Math.floor(Math.random() * 1000),
+          nama_barang: name,
+          departemen: dept,
+          jumlah: qty,
+          harga: price,
+          urgensi: urgency,
+          ulasan: ulasan,
+          min_stock: minStock,
+          tanggal: today,
+          pengaju: pengajuName,
+          wa_pengaju: waNumber,
+          ttd_pengaju: signatureData,
+          persetujuan: "Pending",
+          ttd_admin: "",
+          pembelian: "Belum Dibeli"
+        });
+        addedCount++;
+      }
+    });
+
+    // Remove database cleared flag on new submission
+    localStorage.removeItem("spms_db_cleared");
+
+    // Instantly persist and render locally
+    const localNew = JSON.parse(localStorage.getItem("spms_local_new_items") || "[]");
+    newItems.forEach(rawItem => {
+      const formattedItem = {
+        id: parseInt(rawItem["ID"]),
+        name: rawItem["NAMA BARANG"],
+        dept: rawItem["DEPARTERMENT"],
+        qty: rawItem["JUMLAH"],
+        price: rawItem["HARGA"],
+        urgency: rawItem["URGENSI"],
+        ulasan: rawItem["ULASAN"] || "",
+        minStock: rawItem["MIN STOCK"],
+        pengaju: rawItem["PENGAJU"],
+        wa: rawItem["WA"],
+        signature: rawItem["TANDA TANGAN"],
+        adminSignature: "",
+        approval: "Pending",
+        pembelian: "Belum Dibeli",
+        tanggal: rawItem["TANGGAL"]
+      };
+      localNew.unshift(formattedItem);
+      if (!items.some(i => i.id === formattedItem.id)) {
+        items.unshift(formattedItem);
+      }
+    });
+
+    localStorage.setItem("spms_local_new_items", JSON.stringify(localNew));
+    localStorage.setItem("spms_items", JSON.stringify(items));
+    
+    // Instant UI update
+    updateUI();
+    closeModal();
+    showToast(`✅ ${addedCount} barang berhasil didaftarkan!`);
+
+    // Trigger WA notification to Manager & Direktur for new submission
+    if (newItems.length > 0) {
+      const lastItem = newItems[newItems.length - 1];
+      sendWaNotification(lastItem.ID, "Pengajuan Baru");
+    }
+
+    try {
+      await fetch(SUPABASE_URL, {
+        method: "POST",
+        headers: API_HEADERS,
+        body: JSON.stringify(newItems)
+      });
+    } catch(err) {
+      console.warn("SheetDB sync info", err);
+    } finally {
+      btnSubmit.innerHTML = originalText;
+      btnSubmit.disabled = false;
+    }
+  });
+}
+
+// =====================================================
+// SIGNATURE PAD
+// =====================================================
+function initSignaturePad(canvasId, wrapperId, statusId, clearBtnId) {
+  const canvas  = document.getElementById(canvasId);
+  const wrapper = document.getElementById(wrapperId);
+  const sigStatus = document.getElementById(statusId);
+  if (!canvas) return;
+
+  // Remove old event listeners by cloning the canvas
+  const newCanvas = canvas.cloneNode(true);
+  canvas.parentNode.replaceChild(newCanvas, canvas);
+  const c = document.getElementById(canvasId);
+  const ctx = c.getContext("2d");
+  let drawing = false;
+  let lastX = 0, lastY = 0;
+  let hasMark = false;
+
+  function markSigned() {
+    c.dataset.signed = "true";
+    if (!hasMark) {
+      hasMark = true;
+      if (wrapper) wrapper.classList.add("has-signature");
+      if (sigStatus) {
+        sigStatus.className = "signature-status filled";
+        sigStatus.innerHTML = `
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+          Tanda tangan berhasil direkam`;
+      }
+    }
+  }
+
+  function getPos(e) {
+    const rect = c.getBoundingClientRect();
+    const scaleX = c.width  / rect.width;
+    const scaleY = c.height / rect.height;
+    if (e.touches) {
+      return {
+        x: (e.touches[0].clientX - rect.left) * scaleX,
+        y: (e.touches[0].clientY - rect.top)  * scaleY
+      };
+    }
+    return {
+      x: (e.clientX - rect.left) * scaleX,
+      y: (e.clientY - rect.top)  * scaleY
+    };
+  }
+
+  c.addEventListener("mousedown", e => {
+    drawing = true;
+    const pos = getPos(e);
+    lastX = pos.x; lastY = pos.y;
+    ctx.beginPath();
+    ctx.arc(lastX, lastY, 1.2, 0, Math.PI * 2);
+    ctx.fillStyle = "#1e3a5f";
+    ctx.fill();
+    markSigned();
+  });
+
+  c.addEventListener("mousemove", e => {
+    if (!drawing) return;
+    const pos = getPos(e);
+    ctx.beginPath();
+    ctx.moveTo(lastX, lastY);
+    ctx.lineTo(pos.x, pos.y);
+    ctx.strokeStyle = "#1e3a5f";
+    ctx.lineWidth   = 2.2;
+    ctx.lineCap     = "round";
+    ctx.lineJoin    = "round";
+    ctx.stroke();
+    lastX = pos.x; lastY = pos.y;
+  });
+
+  c.addEventListener("mouseup",    () => { drawing = false; });
+  c.addEventListener("mouseleave", () => { drawing = false; });
+
+  // Touch support
+  c.addEventListener("touchstart", e => {
+    e.preventDefault();
+    drawing = true;
+    const pos = getPos(e);
+    lastX = pos.x; lastY = pos.y;
+    markSigned();
+  }, { passive: false });
+
+  c.addEventListener("touchmove", e => {
+    e.preventDefault();
+    if (!drawing) return;
+    const pos = getPos(e);
+    ctx.beginPath();
+    ctx.moveTo(lastX, lastY);
+    ctx.lineTo(pos.x, pos.y);
+    ctx.strokeStyle = "#1e3a5f";
+    ctx.lineWidth   = 2.2;
+    ctx.lineCap     = "round";
+    ctx.lineJoin    = "round";
+    ctx.stroke();
+    lastX = pos.x; lastY = pos.y;
+  }, { passive: false });
+
+  c.addEventListener("touchend", () => { drawing = false; });
+
+  // Clear button
+  const btnClear = document.getElementById(clearBtnId);
+  if (btnClear) {
+    // Clone to remove old listener
+    const newBtn = btnClear.cloneNode(true);
+    btnClear.parentNode.replaceChild(newBtn, btnClear);
+    document.getElementById(clearBtnId).addEventListener("click", () => {
+      ctx.clearRect(0, 0, c.width, c.height);
+      delete c.dataset.signed;
+      hasMark = false;
+      if (wrapper) wrapper.classList.remove("has-signature");
+      if (sigStatus) {
+        sigStatus.className = "signature-status empty";
+        sigStatus.innerHTML = `
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          Belum ada tanda tangan`;
+      }
+    });
+  }
+}
+
+function isCanvasBlank(canvas) {
+  if (!canvas) return true;
+  if (canvas.dataset && canvas.dataset.signed === "true") return false;
+  const wrapper = canvas.closest(".signature-pad-wrapper");
+  if (wrapper && wrapper.classList.contains("has-signature")) return false;
+  try {
+    const ctx = canvas.getContext("2d");
+    const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+    for (let i = 3; i < data.length; i += 4) {
+      if (data[i] > 0) return false;
+    }
+  } catch (e) {
+    return false;
+  }
+  return true;
+}
+
+// =====================================================
+// SIMPLE TOAST
+// =====================================================
+function showToast(msg) {
+  let t = document.getElementById("spms-toast");
+  if (!t) {
+    t = document.createElement("div");
+    t.id = "spms-toast";
+    t.style.cssText = `
+      position:fixed; bottom:90px; left:50%; transform:translateX(-50%) translateY(20px);
+      background:#0c1220; color:#fff; padding:12px 24px; border-radius:12px;
+      font-size:13px; font-weight:700; box-shadow:0 8px 24px rgba(0,0,0,0.3);
+      z-index:999; opacity:0; transition:all 0.3s ease; white-space:nowrap;
+    `;
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  requestAnimationFrame(() => {
+    t.style.opacity = "1";
+    t.style.transform = "translateX(-50%) translateY(0)";
+  });
+  setTimeout(() => {
+    t.style.opacity = "0";
+    t.style.transform = "translateX(-50%) translateY(20px)";
+  }, 3000);
+}
+
+// =====================================================
+// TABLE RENDER
+// =====================================================
+function renderTable() {
+  if (!reportsTableBody) return;
+
+  const query   = (searchBar?.value || "").toLowerCase();
+  const deptF   = filterDept?.value   || "all";
+  const urgencyF = filterUrgency?.value || "all";
+
+  const filtered = items.filter(item => {
+    const matchSearch  = item.name.toLowerCase().includes(query);
+    const matchDept    = deptF === "all" || item.dept === deptF;
+    const matchUrgency = urgencyF === "all" || item.urgency === urgencyF;
+    return matchSearch && matchDept && matchUrgency;
+  });
+
+  reportsTableBody.innerHTML = "";
+
+  if (filtered.length === 0) {
+    if (tableEmptyState) tableEmptyState.style.display = "block";
+    return;
+  }
+
+  if (tableEmptyState) tableEmptyState.style.display = "none";
+
+  const approvalMeta = {
+    "Disetujui":          { cls: "approval-badge--approved", icon: "✓" },
+    "Disetujui Direktur": { cls: "approval-badge--approved", icon: "✓" },
+    "Disetujui Manager":  { cls: "approval-badge--approved", icon: "👔" },
+    "Pending":            { cls: "approval-badge--pending",  icon: "⏳" },
+    "Ditolak":            { cls: "approval-badge--rejected", icon: "✕" }
+  };
+
+  filtered.forEach(item => {
+    const tr = document.createElement("tr");
+    const total = item.price * item.qty;
+    const isLow = item.qty < item.minStock;
+    const approval = item.approval || "Pending";
+    let meta = approvalMeta[approval] || { cls: "approval-badge--pending", icon: "⏳" };
+    let label = approval;
+
+    if (item.pembelian === "Sudah Dibeli") {
+      meta = { cls: "approval-badge--approved", icon: "✓" };
+      label = "Sudah Dibeli";
+    }
+
+    tr.innerHTML = `
+      <td style="font-weight:700; ${isLow ? 'color:var(--clr-red);' : ''}">
+        ${item.name}
+        ${isLow ? '<span style="display:block;font-size:10px;font-weight:600;color:var(--clr-red);">⚠ Stok Rendah</span>' : ''}
+        ${item.ulasan ? `<span style="display:block;font-size:11px;font-weight:400;color:var(--clr-muted,#64748b);margin-top:2px;font-style:italic;">💬 ${item.ulasan}</span>` : ''}
+      </td>
+      <td>
+        <span style="font-weight:500; font-size: 13px; color:var(--clr-muted);">${item.tanggal || '17 Jul 2026'}</span>
+      </td>
+      <td>
+        <span style="font-weight:600; color:var(--clr-muted);">${item.dept}</span>
+      </td>
+      <td style="font-weight:700;">${item.qty} Pcs</td>
+      <td style="font-weight:500;">Rp ${item.price.toLocaleString("id-ID")}</td>
+      <td style="font-weight:700;">Rp ${total.toLocaleString("id-ID")}</td>
+      <td>
+        <span style="font-weight:600; color:var(--clr-text); display:block;">${item.pengaju || '—'}</span>
+        ${resolveWaDisplay(item) !== '—' ? `
+        <a href="https://api.whatsapp.com/send?phone=${resolveWaDisplay(item).replace(/[^0-9]/g, '')}" target="_blank" rel="noopener noreferrer" style="font-size:11px; font-weight:600; color:#25d366; text-decoration:none; display:inline-flex; align-items:center; gap:3px;" title="Klik untuk chat WhatsApp langsung">
+          📱 ${resolveWaDisplay(item)}
+        </a>
+        ` : `<span style="font-size:11px; font-weight:500; color:var(--clr-muted, #94a3b8); display:inline-flex; align-items:center; gap:3px;">📱 —</span>`}
+      </td>
+      <td>
+        <div class="approval-badge ${meta.cls}">
+          <span>${meta.icon}</span> ${label}
+        </div>
+      </td>
+    `;
+    reportsTableBody.appendChild(tr);
+  });
+}
+
+// Filter bindings
+if (searchBar)      searchBar.addEventListener("input", renderTable);
+if (filterDept)     filterDept.addEventListener("change", renderTable);
+if (filterUrgency)  filterUrgency.addEventListener("change", renderTable);
+
+// =====================================================
+// SUBMISSION TABLE (Dashboard)
+// =====================================================
+function renderSubmissionTable() {
+  const tbody  = document.getElementById("submission-table-body");
+  const empty  = document.getElementById("submission-empty-state");
+  const fApproval = document.getElementById("dash-filter-approval");
+  const fDept     = document.getElementById("dash-filter-dept");
+  if (!tbody) return;
+
+  const approvalF = fApproval?.value || "all";
+  const deptF     = fDept?.value     || "all";
+
+  const filtered = items.filter(item => {
+    const matchApproval = approvalF === "all"
+      || (approvalF === "Sudah Dibeli" && item.pembelian === "Sudah Dibeli")
+      || (approvalF === "Disetujui" && item.approval && item.approval.startsWith("Disetujui"))
+      || (approvalF === "Ditolak" && item.approval === "Ditolak")
+      || (approvalF === "Pending" && (item.approval || "Pending") === "Pending");
+    const matchDept     = deptF === "all" || item.dept === deptF;
+    return matchApproval && matchDept;
+  });
+
+  tbody.innerHTML = "";
+
+  if (filtered.length === 0) {
+    if (empty) empty.style.display = "block";
+    return;
+  }
+  if (empty) empty.style.display = "none";
+
+  const deptMeta = {
+    "Kepesantrenan": { cls: "dept-badge--green",  label: "Kepesantrenan" },
+    "SMK":           { cls: "dept-badge--blue",   label: "SMK" },
+    "SMP":           { cls: "dept-badge--orange", label: "SMP" }
+  };
+
+  const approvalMeta = {
+    "Disetujui": { cls: "approval-badge--approved", icon: "✓" },
+    "Disetujui Direktur": { cls: "approval-badge--approved", icon: "✓" },
+    "Disetujui Manager": { cls: "approval-badge--approved", icon: "👔" },
+    "Pending":   { cls: "approval-badge--pending",  icon: "⏳" },
+    "Ditolak":   { cls: "approval-badge--rejected", icon: "✕" }
+  };
+
+  filtered.forEach((item, idx) => {
+    const total    = item.price * item.qty;
+    const approval = item.approval || "Pending";
+    const dept     = deptMeta[item.dept]      || { cls: "dept-badge--green",    label: item.dept };
+    let apv = approvalMeta[approval] || approvalMeta["Pending"];
+    let apvLabel = approval;
+    if (approval && approval.startsWith("Disetujui") && item.pembelian === "Sudah Dibeli") {
+      apv = { cls: "approval-badge--approved", icon: "✓" };
+      apvLabel = "Sudah Dibeli";
+    } else if (approval && approval.startsWith("Disetujui")) {
+      apv = { cls: "approval-badge--approved", icon: "✓" };
+      apvLabel = "Disetujui (Blm Beli)";
+    }
+    const pengaju  = item.pengaju || "—";
+    const waClean  = (item.wa || "").replace(/[^0-9]/g, "");
+
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td style="font-weight:600; color:var(--clr-muted); text-align:center;">${idx + 1}</td>
+      <td style="font-weight:700;">${item.name}</td>
+      <td><span class="dept-badge ${dept.cls}">${dept.label}</span></td>
+      <td style="font-weight:600;">${item.qty} Pcs</td>
+      <td style="font-weight:700;">Rp ${total.toLocaleString("id-ID")}</td>
+      <td>
+        <span style="font-weight:600; color:var(--clr-text); display:block;">${pengaju}</span>
+        ${resolveWaDisplay(item) !== '—' ? `
+        <a href="https://api.whatsapp.com/send?phone=${resolveWaDisplay(item).replace(/[^0-9]/g, '')}" target="_blank" rel="noopener noreferrer" style="font-size:11px; font-weight:600; color:#25d366; text-decoration:none; display:inline-flex; align-items:center; gap:3px;" title="Klik untuk chat WhatsApp langsung">
+          📱 ${resolveWaDisplay(item)}
+        </a>
+        ` : `<span style="font-size:11px; font-weight:500; color:var(--clr-muted, #94a3b8); display:inline-flex; align-items:center; gap:3px;">📱 —</span>`}
+      </td>
+      <td>
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
+          <span class="approval-badge ${apv.cls}">
+            <span>${apv.icon}</span> ${apvLabel}
+          </span>
+          ${approval !== "Pending" && (item.signature || item.adminSignature) ? `
+          <div style="display: flex; gap: 4px; flex-wrap: wrap; justify-content: center;">
+            ${item.signature ? `<img src="${item.signature}" alt="TTD Pengaju" style="height: 35px; width: auto; background: white; border: 1px solid var(--clr-border); border-radius: 4px; padding: 2px;" title="TTD Pengaju">` : ""}
+            ${item.adminSignature ? `<img src="${item.adminSignature}" alt="TTD Admin" style="height: 35px; width: auto; background: white; border: 1px solid var(--clr-border); border-radius: 4px; padding: 2px;" title="TTD Admin">` : ""}
+          </div>
+          ` : ""}
+        </div>
+      </td>
+      <td>
+        <div class="approval-actions" style="display:flex; gap:6px; align-items:center;">
+          ${(approval === "Pending" || !approval) ? `
+            <button class="btn-approve" data-id="${item.id}" style="background:#10b981; color:white; border:none; padding:6px 12px; border-radius:8px; font-weight:700; font-size:12px; cursor:pointer;" title="Terima Pengajuan">✓ Terima</button>
+            <button class="btn-reject"  data-id="${item.id}" style="background:#ef4444; color:white; border:none; padding:6px 12px; border-radius:8px; font-weight:700; font-size:12px; cursor:pointer;" title="Nolak Pengajuan">✕ Nolak</button>
+          ` : `
+            <button class="btn-pending" data-id="${item.id}" style="background:#f59e0b; color:white; border:none; padding:6px 12px; border-radius:8px; font-weight:700; font-size:12px; cursor:pointer;" title="Batal Persetujuan">↩ Batal</button>
+          `}
+          <button class="btn-edit-item" data-id="${item.id}" style="background:#0284c7; color:white; border:none; padding:6px 12px; border-radius:8px; font-weight:700; font-size:12px; cursor:pointer;" title="Edit Barang">✏️ Edit</button>
+        </div>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  function openAdminSignatureModal(id, action) {
+    currentApprovalId = id;
+    currentApprovalAction = action;
+    const item = items.find(i => i.id == id);
+    const modal = document.getElementById("modal-admin-signature");
+    if (modal) {
+      modal.classList.add("open");
+      const pengajuImg = document.getElementById("pengaju-signature-preview");
+      const pengajuEmpty = document.getElementById("pengaju-signature-empty");
+      if (item && item.signature) {
+        if (pengajuImg) { pengajuImg.src = item.signature; pengajuImg.style.display = "inline-block"; }
+        if (pengajuEmpty) pengajuEmpty.style.display = "none";
+      } else {
+        if (pengajuImg) { pengajuImg.src = ""; pengajuImg.style.display = "none"; }
+        if (pengajuEmpty) pengajuEmpty.style.display = "inline-block";
+      }
+
+      initSignaturePad("admin-signature-canvas", "admin-signature-wrapper", "admin-sig-status", "btn-clear-admin-signature");
+
+      // Reset canvas for modal open
+      const canvas = document.getElementById("admin-signature-canvas");
+      const wrapper = document.getElementById("admin-signature-wrapper");
+      const status = document.getElementById("admin-sig-status");
+
+      if (canvas) {
+        const ctx = canvas.getContext("2d");
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        delete canvas.dataset.signed;
+      }
+      if (wrapper) wrapper.classList.remove("has-signature");
+      if (status) {
+        status.className = "signature-status empty";
+        status.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> Belum ada tanda tangan`;
+      }
+
+      // Auto-fill Direktur / Admin saved signature from their profile if available!
+      try {
+        const prof = typeof getSavedProfile === "function" ? getSavedProfile() : null;
+        if (prof && prof.signature) {
+          const img = new Image();
+          img.onload = () => {
+            const activeAdminCanvas = document.getElementById("admin-signature-canvas");
+            if (activeAdminCanvas) {
+              const ctx = activeAdminCanvas.getContext("2d");
+              ctx.clearRect(0, 0, activeAdminCanvas.width, activeAdminCanvas.height);
+              ctx.drawImage(img, 0, 0, activeAdminCanvas.width, activeAdminCanvas.height);
+              activeAdminCanvas.dataset.signed = "true";
+              const activeAdminWrapper = document.getElementById("admin-signature-wrapper");
+              const activeAdminStatus = document.getElementById("admin-sig-status");
+              if (activeAdminWrapper) activeAdminWrapper.classList.add("has-signature");
+              if (activeAdminStatus) {
+                activeAdminStatus.className = "signature-status filled";
+                activeAdminStatus.innerHTML = `
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                  Tanda tangan terisi otomatis dari Profil`;
+              }
+            }
+          };
+          img.src = prof.signature;
+        }
+      } catch (e) {}
+    }
+  }
+
+  // Approval action handlers
+  tbody.querySelectorAll(".btn-approve").forEach(btn => {
+    btn.addEventListener("click", () => openAdminSignatureModal(parseInt(btn.dataset.id), "Disetujui"));
+  });
+  tbody.querySelectorAll(".btn-reject").forEach(btn => {
+    btn.addEventListener("click", () => openAdminSignatureModal(parseInt(btn.dataset.id), "Ditolak"));
+  });
+  tbody.querySelectorAll(".btn-edit-item").forEach(btn => {
+    btn.addEventListener("click", () => openEditItemModal(parseInt(btn.dataset.id)));
+  });
+  tbody.querySelectorAll(".btn-pending").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const id = parseInt(btn.dataset.id);
+      const item = items.find(i => i.id === id);
+      if (item) {
+        item.approval = "Pending";
+        item.adminSignature = "";
+        saveLocalOverrides(id, "Pending", "", item.pembelian || "Belum Dibeli");
+        updateUI();
+        showToast(`⏳ "${item.name}" dikembalikan ke Pending.`);
+
+        fetch(`${SUPABASE_URL}?id=eq.${id}`, { 
+          method: 'PATCH', 
+          headers: API_HEADERS, 
+          body: JSON.stringify({ persetujuan: "Pending", pembelian: "Belum Dibeli" }) 
+        }).catch(e => console.warn("Supabase sync warning", e));
+      }
+    });
+  });
+}
+
+function openEditItemModal(id) {
+  const item = items.find(i => i.id == id);
+  if (!item) return;
+
+  const modal = document.getElementById("modal-edit-item");
+  if (!modal) return;
+
+  const nameInp = document.getElementById("edit-item-name");
+  const deptInp = document.getElementById("edit-item-dept");
+  const qtyInp = document.getElementById("edit-item-qty");
+  const priceInp = document.getElementById("edit-item-price");
+  const urgInp = document.getElementById("edit-item-urgency");
+  const idInp = document.getElementById("edit-item-id");
+
+  if (idInp) idInp.value = item.id;
+  if (nameInp) nameInp.value = item.name;
+  if (deptInp) deptInp.value = item.dept || "Kepesantrenan";
+  if (qtyInp) qtyInp.value = item.qty;
+  if (priceInp) priceInp.value = item.price;
+  if (urgInp) urgInp.value = item.urgency || "Biasa";
+
+  modal.classList.add("open");
+}
+
+function closeEditItemModal() {
+  const modal = document.getElementById("modal-edit-item");
+  if (modal) modal.classList.remove("open");
+}
+
+function handleAdminSignatureConfirm(e) {
+  if (e) e.preventDefault();
+  const canvas = document.getElementById("admin-signature-canvas");
+  if (canvas && isCanvasBlank(canvas)) {
+    showToast("⚠️ Harap isi tanda tangan terlebih dahulu!");
+    return;
+  }
+  const adminSignatureData = canvas ? canvas.toDataURL() : "";
+  const itemToApprove = items.find(i => i.id == currentApprovalId);
+  const currentPembelian = itemToApprove ? itemToApprove.pembelian : "Belum Dibeli";
+  const session = JSON.parse(sessionStorage.getItem("spms_user") || "{}");
+  let action = currentApprovalAction || "Disetujui";
+  if (action === "Disetujui") {
+    if (session.role === "manager") action = "Disetujui Manager";
+    else if (session.role === "direktur") action = "Disetujui";
+  }
+
+  // 1. Instant local update
+  if (itemToApprove) {
+    itemToApprove.approval = action;
+    itemToApprove.adminSignature = adminSignatureData;
+    saveLocalOverrides(currentApprovalId, action, adminSignatureData, currentPembelian);
+    updateUI();
+  }
+
+  // 2. Instant modal close & toast
+  const modal = document.getElementById("modal-admin-signature");
+  if (modal) modal.classList.remove("open");
+  showToast(`✅ Status berhasil diperbarui menjadi ${action}!`);
+
+  // Automatically trigger WhatsApp notification synchronously
+  if (currentApprovalId) {
+    sendWaNotification(currentApprovalId, action);
+  }
+
+  // 3. Background sync to SheetDB
+  if (currentApprovalId) {
+    fetch(`${SUPABASE_URL}?id=eq.${currentApprovalId}`, { 
+      method: 'PATCH', 
+      headers: API_HEADERS, 
+      body: JSON.stringify({
+        persetujuan: action,
+        ttd_admin: adminSignatureData,
+        pembelian: currentPembelian
+      }) 
+    }).catch(err => console.warn("Supabase sync warning", err));
+  }
+}
+
+// Delegated Admin Signature Form Submit & Click Handler
+document.addEventListener("submit", (e) => {
+  if (e.target && e.target.id === "form-admin-signature") {
+    handleAdminSignatureConfirm(e);
+  }
+});
+
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest("#modal-admin-signature button[type='submit'], #btn-submit-admin-sig");
+  if (btn) {
+    handleAdminSignatureConfirm(e);
+  }
+});
+
+// Modal close handlers for admin signature
+document.getElementById("btn-close-admin-modal")?.addEventListener("click", () => {
+  document.getElementById("modal-admin-signature")?.classList.remove("open");
+});
+document.getElementById("btn-cancel-admin-modal")?.addEventListener("click", () => {
+  document.getElementById("modal-admin-signature")?.classList.remove("open");
+});
+
+// Filter bindings (dashboard submission table)
+document.addEventListener("DOMContentLoaded", () => {
+  const fApproval = document.getElementById("dash-filter-approval");
+  const fDept     = document.getElementById("dash-filter-dept");
+  if (fApproval) fApproval.addEventListener("change", renderSubmissionTable);
+  if (fDept)     fDept.addEventListener("change", renderSubmissionTable);
+});
+
+// =====================================================
+// EXPORT CSV
+// =====================================================
+if (btnExportCSV) {
+  btnExportCSV.addEventListener("click", () => {
+    if (items.length === 0) { showToast("Tidak ada data untuk diekspor!"); return; }
+
+    let csv = "data:text/csv;charset=utf-8,";
+    csv += "ID,Nama Barang,Departemen,Jumlah,Harga Satuan,Total Harga,Status,Batas Stok\r\n";
+
+    items.forEach(i => {
+      csv += [i.id, `"${i.name}"`, `"${i.dept}"`, i.qty, i.price, i.qty * i.price, i.urgency, i.minStock].join(",") + "\r\n";
+    });
+
+    const a = document.createElement("a");
+    a.setAttribute("href", encodeURI(csv));
+    a.setAttribute("download", "SPMS-Laporan-Pengadaan.csv");
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  });
+}
+
+// =====================================================
+// PROFILE VIEW LOGIC
+// =====================================================
+function initProfileView() {
+  const formProfile = document.getElementById("form-user-profile");
+  if (!formProfile) return;
+
+  initSignaturePad("profile-signature-canvas", "profile-signature-wrapper", "profile-sig-status", "btn-clear-profile-signature");
+
+  const inputFullname = document.getElementById("profile-fullname");
+  const inputWa       = document.getElementById("profile-wa");
+  const canvasProfile = document.getElementById("profile-signature-canvas");
+  const wrapperProfile = document.getElementById("profile-signature-wrapper");
+  const statusProfile = document.getElementById("profile-sig-status");
+
+  // Load saved profile data
+  try {
+    const saved = getSavedProfile();
+    const sessionUser = JSON.parse(sessionStorage.getItem("spms_user") || "{}");
+
+    let defaultName = saved.fullname || sessionUser.name || "";
+    if (!defaultName && sessionUser.role === "direktur") defaultName = "Hibatullah (Direktur)";
+    else if (!defaultName && sessionUser.role === "manager") defaultName = "Manager SPMS";
+    else if (!defaultName && sessionUser.role === "admin") defaultName = "Admin SPMS";
+
+    if (inputFullname) inputFullname.value = defaultName;
+    if (inputWa)       inputWa.value       = cleanWaInputValue(saved.wa || "");
+
+    if (saved.signature) {
+      const img = new Image();
+      img.onload = function() {
+        const activeProfCanvas = document.getElementById("profile-signature-canvas");
+        if (activeProfCanvas) {
+          const ctx = activeProfCanvas.getContext("2d");
+          ctx.clearRect(0, 0, activeProfCanvas.width, activeProfCanvas.height);
+          ctx.drawImage(img, 0, 0, activeProfCanvas.width, activeProfCanvas.height);
+          activeProfCanvas.dataset.signed = "true";
+          const activeProfWrapper = document.getElementById("profile-signature-wrapper");
+          const activeProfStatus = document.getElementById("profile-sig-status");
+          if (activeProfWrapper) activeProfWrapper.classList.add("has-signature");
+          if (activeProfStatus) {
+            activeProfStatus.className = "signature-status filled";
+            activeProfStatus.innerHTML = `
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+              Tanda tangan profil tersimpan`;
+          }
+        }
+      };
+      img.src = saved.signature;
+    }
+  } catch (e) {}
+
+  // Save profile submit handler
+  formProfile.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const fullname = inputFullname ? inputFullname.value.trim() : "";
+    const rawWa    = inputWa ? inputWa.value.trim() : "";
+    const wa       = rawWa ? formatWaInput(rawWa) : "";
+    if (!fullname) {
+      showToast("⚠️ Harap masukkan nama lengkap Anda!");
+      return;
+    }
+
+    const curProfCanvas = document.getElementById("profile-signature-canvas");
+    const signatureData = curProfCanvas && !isCanvasBlank(curProfCanvas) ? curProfCanvas.toDataURL() : "";
+
+    const profileData = {
+      fullname: fullname,
+      wa: wa,
+      signature: signatureData
+    };
+
+    const session = JSON.parse(sessionStorage.getItem("spms_user") || "{}");
+    const nameClean = fullname.toLowerCase().replace(/[^a-z0-9]/g, "_");
+    const userClean = (session.username || "").toLowerCase().replace(/[^a-z0-9]/g, "_");
+    const roleClean = (session.role || "").toLowerCase().replace(/[^a-z0-9]/g, "_");
+
+    localStorage.setItem(getUserProfileKey(), JSON.stringify(profileData));
+    if (nameClean) localStorage.setItem("spms_profile_" + nameClean, JSON.stringify(profileData));
+    if (userClean) localStorage.setItem("spms_profile_" + userClean, JSON.stringify(profileData));
+    if (roleClean) localStorage.setItem("spms_profile_" + roleClean, JSON.stringify(profileData));
+
+    showToast("✅ Profil & Tanda Tangan berhasil disimpan!");
+  });
+}
+
+// =====================================================
+// INIT
+// =====================================================
+window.addEventListener("DOMContentLoaded", () => {
+  fetchItems();
+  initProfileView();
+
+  // --- Load session user info into header ---
+  try {
+    const session = JSON.parse(sessionStorage.getItem("spms_user") || "{}");
+    if (session && session.name) {
+      const displayName = document.getElementById("user-display-name");
+      const displayRole = document.getElementById("user-display-role");
+      const avatarLetter = document.getElementById("user-avatar-letter");
+
+      if (displayName) displayName.textContent = session.name;
+      if (displayRole) displayRole.textContent  = session.role === "direktur" ? "Direktur" : session.role === "manager" ? "Manager" : session.role === "admin" ? "Administrator" : (session.role === "inventaris" || session.role === "pengajuan") ? "Pengajuan" : session.role || "Staff";
+      if (avatarLetter) avatarLetter.textContent = session.name.charAt(0).toUpperCase();
+
+      // Set body class for CSS role-based rules
+      document.body.classList.add(`role-${session.role}`);
+
+      // Admin specific restrictions: Only show Admin History and Admin Purchases
+      if (session.role === 'admin') {
+        ['nav-dashboard', 'nav-approval', 'nav-reports'].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.style.display = 'none';
+        });
+        ['dashboard', 'approval', 'reports'].forEach(tab => {
+          const el = document.querySelector(`.bottom-nav .nav-item[data-tab="${tab}"]`);
+          if (el) el.style.display = 'none';
+        });
+
+        if (document.getElementById('view-admin-history')) {
+          setTimeout(() => switchTab('admin-history'), 50);
+        }
+      }
+
+      // Direktur & Manager specific: Show Dashboard, Approval, Reports & Profile
+      if (session.role === 'direktur' || session.role === 'manager') {
+        ['nav-admin-history', 'nav-admin-purchases'].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.style.display = 'none';
+        });
+        ['admin-history', 'admin-purchases'].forEach(tab => {
+          const el = document.querySelector(`.bottom-nav .nav-item[data-tab="${tab}"]`);
+          if (el) el.style.display = 'none';
+        });
+
+        // Auto switch to approval tab if on admin page
+        if (document.getElementById('view-approval')) {
+          setTimeout(() => switchTab('approval'), 50);
+        }
+      }
+    }
+  } catch(e) {}
+
+  // --- Logout button ---
+  const btnLogout = document.getElementById("btn-logout");
+  if (btnLogout) {
+    btnLogout.addEventListener("click", () => {
+      sessionStorage.removeItem("spms_user");
+      window.location.href = "login.html";
+    });
+  }
+
+  // --- Mobile Sidebar Menu Toggle ---
+  const btnMenuMobile = document.getElementById("btn-menu-mobile");
+  const sidebarBackdrop = document.getElementById("sidebar-backdrop");
+  if (btnMenuMobile) {
+    btnMenuMobile.addEventListener("click", (e) => {
+      e.stopPropagation();
+      document.body.classList.toggle("mobile-sidebar-open");
+    });
+  }
+  if (sidebarBackdrop) {
+    sidebarBackdrop.addEventListener("click", () => {
+      document.body.classList.remove("mobile-sidebar-open");
+    });
+  }
+  document.querySelectorAll(".sidebar-nav .nav-item").forEach(item => {
+    item.addEventListener("click", () => {
+      document.body.classList.remove("mobile-sidebar-open");
+    });
+  });
+
+  // --- Download Links Verification ---
+  document.querySelectorAll("a[download]").forEach(link => {
+    link.addEventListener("click", (e) => {
+      // Allow default browser download action
+    });
+  });
+
+  // --- Drag to Scroll for Table Containers ---
+  document.querySelectorAll(".table-container").forEach(slider => {
+    let isDown = false;
+    let startX, scrollLeft;
+
+    slider.addEventListener("mousedown", (e) => {
+      isDown = true;
+      slider.classList.add("active-drag");
+      startX = e.pageX - slider.offsetLeft;
+      scrollLeft = slider.scrollLeft;
+    });
+    slider.addEventListener("mouseleave", () => {
+      isDown = false;
+      slider.classList.remove("active-drag");
+    });
+    slider.addEventListener("mouseup", () => {
+      isDown = false;
+      slider.classList.remove("active-drag");
+    });
+    slider.addEventListener("mousemove", (e) => {
+      if (!isDown) return;
+      e.preventDefault();
+      const x = e.pageX - slider.offsetLeft;
+      const walk = (x - startX) * 1.5;
+      slider.scrollLeft = scrollLeft - walk;
+    });
+  });
+
+  // --- Notifications ---
+  const btnNotif = document.getElementById("btn-notif");
+  const notifDropdown = document.getElementById("notif-dropdown");
+  const btnMarkRead = document.getElementById("btn-mark-read");
+  const notifBadge = document.getElementById("notif-badge");
+  const notifList = document.getElementById("notif-list");
+  
+  if (btnNotif && notifDropdown) {
+    btnNotif.addEventListener("click", (e) => {
+      e.stopPropagation();
+      notifDropdown.classList.toggle("show");
+    });
+    document.addEventListener("click", (e) => {
+      if (!notifDropdown.contains(e.target) && e.target !== btnNotif) {
+        notifDropdown.classList.remove("show");
+      }
+    });
+  }
+
+  window.updateNotifications = function() {
+    if (!notifList || !notifBadge) return;
+    try {
+      const session = JSON.parse(sessionStorage.getItem("spms_user") || "{}");
+      if (!session.role) return;
+
+      const readNotifs = JSON.parse(localStorage.getItem(`read_notifs_${session.role}`) || "[]");
+      let newNotifs = [];
+
+      if (session.role === "manager") {
+        // Manager sees Pending items from Pengajuan
+        newNotifs = items.filter(i => i.approval === "Pending").map(i => ({
+          id: i.id,
+          title: "Pengajuan Baru",
+          desc: `${i.pengaju || 'Pengajuan'} mengajukan ${i.qty} Pcs ${i.name} (${i.dept})`,
+          icon: "⏳", cls: "notif-icon--pending",
+          isRead: readNotifs.includes(i.id)
+        }));
+      } else if (session.role === "direktur") {
+        // Direktur sees items approved by Manager OR Pending items
+        newNotifs = items.filter(i => i.approval === "Disetujui Manager" || i.approval === "Pending").map(i => ({
+          id: i.id,
+          title: i.approval === "Disetujui Manager" ? "Persetujuan Manager" : "Pengajuan Baru",
+          desc: i.approval === "Disetujui Manager" 
+            ? `Manager telah menyetujui ${i.name}. Menunggu persetujuan Direktur.` 
+            : `${i.pengaju || 'Pengajuan'} mengajukan ${i.qty} Pcs ${i.name}`,
+          icon: "👔", cls: "notif-icon--approved",
+          isRead: readNotifs.includes(i.id)
+        }));
+      } else if (session.role === "admin") {
+        // Admin sees items approved by Direktur that are ready to purchase
+        newNotifs = items.filter(i => (i.approval === "Disetujui" || i.approval === "Disetujui Direktur") && i.pembelian !== "Sudah Dibeli").map(i => ({
+          id: i.id,
+          title: "Siap Dibeli",
+          desc: `Direktur telah menyetujui pengadaan ${i.qty} Pcs ${i.name}`,
+          icon: "🛒", cls: "notif-icon--approved",
+          isRead: readNotifs.includes(i.id)
+        }));
+      } else {
+        // Pengajuan / Staff: Sees when item is approved by Manager/Direktur or bought by Admin
+        newNotifs = items.filter(i => i.approval !== "Pending").map(i => {
+          const isBought = i.pembelian === "Sudah Dibeli";
+          const isApprovedDir = i.approval === "Disetujui" || i.approval === "Disetujui Direktur";
+          const isApprovedMgr = i.approval === "Disetujui Manager";
+
+          let title = "Respon Pengajuan";
+          let desc = `Pengajuan ${i.name} ${i.approval}`;
+          let icon = "📌";
+
+          if (isBought) {
+            title = "Barang Sudah Dibeli Admin! 🎉";
+            desc = `Pengajuan "${i.name}" (${i.qty} Pcs) telah selesai dibelikan oleh Admin.`;
+            icon = "✅";
+          } else if (isApprovedDir) {
+            title = "Disetujui Direktur! ✔️";
+            desc = `Pengajuan "${i.name}" disetujui Direktur & diteruskan ke Admin untuk dibeli.`;
+            icon = "✔️";
+          } else if (isApprovedMgr) {
+            title = "Disetujui Manager! 👔";
+            desc = `Pengajuan "${i.name}" disetujui Manager & diteruskan ke Direktur.`;
+            icon = "👔";
+          } else {
+            title = "Pengajuan Ditolak ✕";
+            desc = `Pengajuan "${i.name}" ditolak oleh Manajemen.`;
+            icon = "❌";
+          }
+
+          return {
+            id: title,
+            title: title,
+            desc: desc,
+            icon: icon,
+            cls: (isBought || isApprovedDir || isApprovedMgr) ? "notif-icon--approved" : "notif-icon--pending",
+            isRead: readNotifs.includes(i.id)
+          };
+        });
+      }
+
+      const unreadCount = newNotifs.filter(n => !n.isRead).length;
+      if (unreadCount > 0) {
+        notifBadge.textContent = unreadCount > 9 ? "9+" : unreadCount;
+        notifBadge.style.display = "flex";
+      } else {
+        notifBadge.style.display = "none";
+      }
+
+      if (newNotifs.length === 0) {
+        notifList.innerHTML = `<div class="notif-empty">Belum ada aktivitas.</div>`;
+      } else {
+        notifList.innerHTML = newNotifs.slice().reverse().map(n => `
+          <div class="notif-item ${n.isRead ? '' : 'unread'}">
+            <div class="notif-icon ${n.cls}">${n.icon}</div>
+            <div class="notif-content">
+              <p class="notif-title">${n.title}</p>
+              <p class="notif-desc">${n.desc}</p>
+            </div>
+          </div>
+        `).join("");
+      }
+
+      if (btnMarkRead) {
+        btnMarkRead.onclick = () => {
+          const allIds = newNotifs.map(n => n.id);
+          localStorage.setItem(`read_notifs_${session.role}`, JSON.stringify(allIds));
+          updateNotifications();
+          notifDropdown.classList.remove("show");
+        };
+      }
+    } catch(e) {}
+  };
+
+  // --- Edit Modal Handlers ---
+  const btnCloseEdit = document.getElementById("btn-close-edit-modal");
+  const btnCancelEdit = document.getElementById("btn-cancel-edit-modal");
+  const formEditItem = document.getElementById("form-edit-item");
+
+  if (btnCloseEdit) btnCloseEdit.addEventListener("click", closeEditItemModal);
+  if (btnCancelEdit) btnCancelEdit.addEventListener("click", closeEditItemModal);
+
+  if (formEditItem) {
+    formEditItem.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const id = document.getElementById("edit-item-id").value;
+      const item = items.find(i => i.id == id);
+      if (!item) return;
+
+      item.name = document.getElementById("edit-item-name").value;
+      item.dept = document.getElementById("edit-item-dept").value;
+      item.qty = parseInt(document.getElementById("edit-item-qty").value) || 1;
+      item.price = parseFloat(document.getElementById("edit-item-price").value) || 0;
+      item.urgency = document.getElementById("edit-item-urgency").value;
+
+      closeEditItemModal();
+      updateUI();
+      showToast(`✅ Data "${item.name}" berhasil diperbarui!`);
+
+      try {
+        await fetch(`${SUPABASE_URL}?id=eq.${id}`, {
+          method: 'PATCH',
+          headers: API_HEADERS,
+          body: JSON.stringify({
+            nama_barang: item.name,
+            departemen: item.dept,
+            jumlah: item.qty,
+            harga: item.price,
+            urgensi: item.urgency,
+            ulasan: item.ulasan || ""
+          })
+        });
+      } catch (err) {
+        console.warn("Gagal sync edit ke SheetDB", err);
+      }
+    });
+  }
+
+  // --- Initialize AI Assistant ---
+  initAiAssistant();
+});
+
+// =====================================================
+// SPMS AI ASSISTANT LOGIC
+// =====================================================
+window.toggleAiModal = function(show) {
+  const modalAi = document.getElementById("modal-ai-assistant");
+  if (!modalAi) return;
+
+  if (show === false) {
+    modalAi.classList.remove("open");
+    modalAi.style.display = "none";
+  } else {
+    modalAi.style.display = "flex";
+    modalAi.classList.add("open");
+    const inputAi = document.getElementById("ai-input-text");
+    if (inputAi) setTimeout(() => inputAi.focus(), 150);
+  }
+};
+
+window.submitAiForm = function(e) {
+  if (e) {
+    if (e.preventDefault) e.preventDefault();
+    if (e.stopPropagation) e.stopPropagation();
+  }
+  const inputAi = document.getElementById("ai-input-text");
+  if (!inputAi) return false;
+  const text = inputAi.value.trim();
+  if (!text) return false;
+
+  askAiPrompt(text);
+  inputAi.value = "";
+  return false;
+};
+
+function initAiAssistant() {
+  const btnOpenAi = document.getElementById("btn-open-ai");
+  const btnCloseAi = document.getElementById("btn-close-ai-modal");
+  const modalAi = document.getElementById("modal-ai-assistant");
+  const formAi = document.getElementById("form-ai-chat");
+
+  if (!modalAi) return;
+
+  const handleOpen = (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    toggleAiModal(true);
+  };
+
+  const handleClose = (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    toggleAiModal(false);
+  };
+
+  if (btnOpenAi) {
+    btnOpenAi.addEventListener("click", handleOpen);
+    btnOpenAi.addEventListener("pointerdown", handleOpen);
+  }
+
+  if (btnCloseAi) {
+    btnCloseAi.addEventListener("click", handleClose);
+    btnCloseAi.addEventListener("pointerdown", handleClose);
+  }
+
+  modalAi.addEventListener("click", (e) => {
+    if (e.target === modalAi) toggleAiModal(false);
+  });
+
+  if (formAi) {
+  formAi.addEventListener("submit", (e) => submitAiForm(e));
+  }
+}
+
+function escapeHtml(str) {
+  return (str || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+async function fetchGeminiAiResponse(queryText) {
+  const apiKey = getGeminiApiKey();
+
+  if (!apiKey) {
+    return generateSmartAiResponse(queryText);
+  }
+
+  const totalItems   = items.length;
+  const pendingCount = items.filter(i => (i.approval || 'Pending') === 'Pending').length;
+  const approvedCount= items.filter(i => i.approval === 'Disetujui' || i.approval === 'Disetujui Direktur').length;
+  const rejectedCount= items.filter(i => i.approval === 'Ditolak').length;
+  const boughtCount  = items.filter(i => i.pembelian === 'Sudah Dibeli').length;
+  const belumCount   = items.filter(i => i.approval === 'Disetujui' && i.pembelian !== 'Sudah Dibeli').length;
+  const totalRupiah  = items.reduce((sum, i) => sum + ((parseFloat(i.price)||0) * (parseInt(i.qty)||1)), 0);
+  const boughtRupiah = items.filter(i => i.pembelian === 'Sudah Dibeli')
+                            .reduce((sum, i) => sum + ((parseFloat(i.price)||0) * (parseInt(i.qty)||1)), 0);
+
+  const databaseSummary = items.slice(0, 20).map(i =>
+    `- ${i.name} | Unit: ${i.dept} | Qty: ${i.qty} Pcs | Harga: Rp ${(parseFloat(i.price)||0).toLocaleString('id-ID')} | Pengaju: ${i.pengaju || 'Staff'} | Urgensi: ${i.urgency || 'Normal'} | Status: ${i.pembelian === 'Sudah Dibeli' ? 'Sudah Dibeli' : i.approval || 'Pending'} | Tgl: ${i.tanggal || '-'}`
+  ).join("\n");
+
+  const systemContext = `Kamu adalah SPMS AI Assistant, asisten pengadaan barang sekolah Hibatullah IIBS.
+
+Sistem ini memiliki 4 jenis pengguna:
+1. **Pengajuan (Pengaju)** — Menginput pengajuan barang kebutuhan sekolah
+2. **Manager** — Menyetujui atau menolak pengajuan barang dari inventaris
+3. **Direktur** — Memberikan persetujuan final atas pengajuan yang sudah di-acc Manager
+4. **Admin** — Mengeksekusi pembelian fisik barang yang sudah disetujui, mencatat bukti, dan mengirim WA konfirmasi ke pengaju
+
+Alur kerja SPMS:
+Pengajuan input → notif WA ke Manager → Manager acc → notif WA ke Direktur → Direktur acc final → notif WA ke Admin → Admin beli & tandai sudah dibeli → notif WA ke Pengaju
+
+Data REAL database pengadaan sekarang:
+- Total Pengajuan: ${totalItems} barang
+- Menunggu Persetujuan (Pending): ${pendingCount} barang
+- Sudah Disetujui Manajemen: ${approvedCount} barang
+- Ditolak: ${rejectedCount} barang
+- Sudah Dibeli Admin: ${boughtCount} barang
+- Belum Dibeli (sudah acc tapi belum dibeli): ${belumCount} barang
+- Total Estimasi Anggaran Seluruh Pengajuan: Rp ${totalRupiah.toLocaleString('id-ID')}
+- Total Nilai Barang Sudah Dibeli: Rp ${boughtRupiah.toLocaleString('id-ID')}
+
+Daftar Barang di Database (maks 20 terbaru):
+${databaseSummary}
+
+Aturan menjawab:
+- Jawab LANGSUNG sesuai pertanyaan, jangan preamble panjang
+- Gunakan data real di atas jika relevan
+- Gunakan bahasa Indonesia santai tapi profesional
+- Jika ditanya data (berapa barang, total anggaran, dll) — jawab pakai angka real di atas
+- Jika ditanya cara kerja/alur — jelaskan alur di atas secara singkat
+- Format dengan <strong>, <br>, <ul><li> jika membantu
+- Jangan pernah mulai jawaban dengan "Saya memahami..." atau "Tentu saja, pertanyaan Anda..."`;
+
+  try {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [
+          {
+            role: "user",
+            parts: [
+              { text: systemContext },
+              { text: queryText }
+            ]
+          }
+        ],
+        generationConfig: {
+          temperature: 0.65,
+          maxOutputTokens: 900
+        }
+      })
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (rawText) {
+        let formatted = rawText
+          .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+          .replace(/\*(.*?)\*/g, '<em>$1</em>')
+          .replace(/\n\n/g, '<br><br>')
+          .replace(/\n/g, '<br>');
+        return formatted;
+      }
+    }
+  } catch (err) {
+    console.warn("Gemini API call failed, falling back to internal engine:", err);
+  }
+
+  return generateSmartAiResponse(queryText);
+}
+
+window.askAiPrompt = async function(queryText) {
+  if (!queryText || !queryText.trim()) return;
+
+  const modalAi = document.getElementById("modal-ai-assistant");
+  if (modalAi) {
+    modalAi.style.display = "flex";
+    modalAi.classList.add("open");
+  }
+
+  const chatBody = document.getElementById("ai-chat-body");
+  if (!chatBody) return;
+
+  // 1. Append User Message
+  const userMsg = document.createElement("div");
+  userMsg.className = "ai-msg ai-msg--user";
+  userMsg.innerHTML = `
+    <div class="ai-avatar">👤</div>
+    <div class="ai-bubble">${escapeHtml(queryText)}</div>
+  `;
+  chatBody.appendChild(userMsg);
+  chatBody.scrollTop = chatBody.scrollHeight;
+
+  // 2. Typing indicator
+  const typingId = "typing-" + Date.now();
+  const typingMsg = document.createElement("div");
+  typingMsg.className = "ai-msg ai-msg--bot";
+  typingMsg.id = typingId;
+  typingMsg.innerHTML = `
+    <div class="ai-avatar">🤖</div>
+    <div class="ai-bubble" style="color:var(--clr-muted); font-style:italic;">
+      <span>SPMS AI sedang memproses... ⚡</span>
+    </div>
+  `;
+  chatBody.appendChild(typingMsg);
+  chatBody.scrollTop = chatBody.scrollHeight;
+
+  // 3. Fetch AI Response asynchronously with fallback
+  try {
+    const responseHtml = await fetchGeminiAiResponse(queryText);
+    const indicator = document.getElementById(typingId);
+    if (indicator) indicator.remove();
+
+    const botMsg = document.createElement("div");
+    botMsg.className = "ai-msg ai-msg--bot";
+    botMsg.innerHTML = `
+      <div class="ai-avatar">🤖</div>
+      <div class="ai-bubble">${responseHtml}</div>
+    `;
+    chatBody.appendChild(botMsg);
+    chatBody.scrollTop = chatBody.scrollHeight;
+  } catch (err) {
+    const indicator = document.getElementById(typingId);
+    if (indicator) indicator.remove();
+
+    const fallbackHtml = generateSmartAiResponse(queryText);
+    const botMsg = document.createElement("div");
+    botMsg.className = "ai-msg ai-msg--bot";
+    botMsg.innerHTML = `
+      <div class="ai-avatar">🤖</div>
+      <div class="ai-bubble">${fallbackHtml}</div>
+    `;
+    chatBody.appendChild(botMsg);
+    chatBody.scrollTop = chatBody.scrollHeight;
+  }
+};
+
+function generateSmartAiResponse(text) {
+  const query = (text || "").trim().toLowerCase();
+
+  // ===== LIVE DATABASE STATS =====
+  const totalItems    = items.length;
+  const pendingCount  = items.filter(i => (i.approval || 'Pending') === 'Pending').length;
+  const approvedCount = items.filter(i => i.approval === 'Disetujui' || i.approval === 'Disetujui Direktur').length;
+  const rejectedCount = items.filter(i => i.approval === 'Ditolak').length;
+  const boughtCount   = items.filter(i => i.pembelian === 'Sudah Dibeli').length;
+  const belumCount    = items.filter(i => (i.approval === 'Disetujui' || i.approval === 'Disetujui Direktur') && i.pembelian !== 'Sudah Dibeli').length;
+  const totalRupiah   = items.reduce((s, i) => s + ((parseFloat(i.price)||0) * (parseInt(i.qty)||1)), 0);
+  const boughtRupiah  = items.filter(i => i.pembelian === 'Sudah Dibeli').reduce((s, i) => s + ((parseFloat(i.price)||0) * (parseInt(i.qty)||1)), 0);
+  const urgentItems   = items.filter(i => i.urgency === 'Urgent');
+  const deptCounts    = {};
+  items.forEach(i => { deptCounts[i.dept] = (deptCounts[i.dept] || 0) + 1; });
+  const deptList      = Object.entries(deptCounts).map(([d,c]) => `${d} (${c})`).join(', ');
+  const recentItems   = items.slice(0, 5).map(i => `• <strong>${i.name}</strong> (${i.dept}) — ${i.pembelian === 'Sudah Dibeli' ? 'Sudah Dibeli 🛒' : i.approval || 'Pending'}`).join('<br>');
+  const pendingList   = items.filter(i => (i.approval||'Pending')==='Pending').slice(0,5).map(i => `• <strong>${i.name}</strong> (${i.dept}) oleh ${i.pengaju||'—'}`).join('<br>');
+  const belumList     = items.filter(i => (i.approval==='Disetujui'||i.approval==='Disetujui Direktur') && i.pembelian!=='Sudah Dibeli').slice(0,5).map(i => `• <strong>${i.name}</strong> (${i.dept}) — Rp ${(parseFloat(i.price)||0).toLocaleString('id-ID')} x ${i.qty}`).join('<br>');
+
+  // ===== SAPAAN =====
+  if (/^(hai|haii|haiii|halo|haloo|hello|helo|assalamu|assalamualaikum|pagi|siang|malam|salam|tes|test|p\b|oi\b|woi\b|min\b|bot\b)/i.test(query) || query.length <= 3) {
+    return `Halo kak! 👋 Ada yang bisa dibantu hari ini? Saya bisa bantu soal pengajuan, persetujuan, pembelian, maupun info pengadaan SPMS! 😊`;
+  }
+  if (query.includes("apa kabar") || query.includes("gimana kabar") || query.includes("kabar kamu") || query.includes("sehat")) {
+    return `Alhamdulillah baik kak, siap membantu penuh! 😊 Kakak sendiri gimana kabarnya? Ada yang ingin ditanyakan seputar pengadaan barang sekolah?`;
+  }
+  if (query.includes("siapa kamu") || query.includes("siapa anda") || query.includes("kamu itu apa") || query.includes("kamu bot") || (query.includes("siapa") && query.includes("spms"))) {
+    return `Saya SPMS AI Assistant 🤖 — asisten pintar pengadaan barang Hibatullah IIBS. Saya memahami alur kerja Pengajuan, Manager, Direktur, dan Admin. Tanyakan apa saja kak! 😊`;
+  }
+  if (query.includes("terima kasih") || query.includes("makasih") || query.includes("thanks") || query.includes("thx")) {
+    return `Sama-sama kak! 😊 Senang bisa membantu. Kalau ada pertanyaan lain seputar pengadaan, jangan sungkan ya!`;
+  }
+
+  // ===== RINGKASAN UMUM =====
+  if (query.includes("ringkasan") || query.includes("rekap") || query.includes("dashboard") || query.includes("statistik") || query.includes("overview")) {
+    return `📊 <strong>Ringkasan Pengadaan SPMS</strong>:<br><br>
+      • Total Pengajuan: <strong>${totalItems} barang</strong><br>
+      • Pending: <strong>${pendingCount}</strong> | Disetujui: <strong>${approvedCount}</strong> | Ditolak: <strong>${rejectedCount}</strong><br>
+      • Sudah Dibeli: <strong>${boughtCount}</strong> | Belum Dibeli (sudah acc): <strong>${belumCount}</strong><br>
+      • Total Anggaran: <strong>Rp ${totalRupiah.toLocaleString('id-ID')}</strong><br>
+      • Realisasi Pembelian: <strong>Rp ${boughtRupiah.toLocaleString('id-ID')}</strong><br>
+      • Barang Urgent: <strong>${urgentItems.length} barang</strong><br>
+      • Unit Aktif: ${deptList || '—'}`;
+  }
+  if (query.includes("alur") || query.includes("cara kerja") || query.includes("mekanisme") || query.includes("sistem kerja")) {
+    return `🔄 <strong>Alur Kerja SPMS</strong>:<br><br>
+      <strong>1. Pengajuan</strong> input pengajuan barang → notif WA ke Manager<br>
+      <strong>2. Manager</strong> review & setujui → notif WA ke Direktur<br>
+      <strong>3. Direktur</strong> acc final → notif WA ke Admin<br>
+      <strong>4. Admin</strong> beli barang & tandai selesai → notif WA ke Pengaju<br><br>
+      <em>Setiap tahap ada notifikasi WhatsApp otomatis via Fonnte!</em>`;
+  }
+
+  // ============================================================
+  // ==================== INVENTARIS ============================
+  // ============================================================
+  if (query.includes("cara ajukan") || query.includes("cara mengajukan") || (query.includes("ajukan") && query.includes("baru")) || query.includes("tambah barang baru")) {
+    return `📝 <strong>Cara Mengajukan Barang Baru (Pengajuan)</strong>:<br><br>
+      1. Klik tombol <strong>+ Tambah Barang</strong> di halaman beranda<br>
+      2. Pilih unit: Kepesantrenan / SMK / SMP<br>
+      3. Isi nama barang, jumlah, harga satuan, urgensi<br>
+      4. Tambahkan keterangan/ulasan jika perlu<br>
+      5. Isi nama pengaju & nomor WhatsApp<br>
+      6. Gambar tanda tangan digital<br>
+      7. Klik <strong>Simpan & Ajukan</strong><br><br>
+      📲 <em>Notifikasi WA otomatis dikirim ke Manager & Direktur!</em>`;
+  }
+  if ((query.includes("lebih dari") || query.includes("beberapa") || query.includes("banyak barang") || query.includes("tambah barang lain")) && !query.includes("admin")) {
+    return `Bisa kak! 😊 Di form pengajuan ada tombol <strong>+ Tambah Barang Lain</strong> yang bisa diklik untuk menambah barang ke-2, ke-3, dst dalam satu pengajuan sekaligus.`;
+  }
+  if ((query.includes("format harga") || query.includes("isi harga") || query.includes("harga satuan")) && !query.includes("admin")) {
+    return `Untuk harga satuan, ketik angkanya saja kak, misalnya <strong>150000</strong> untuk Rp 150.000. Sistem akan otomatis memformat. Jangan tambahkan "Rp" atau titik manual! 😊`;
+  }
+  if ((query.includes("status pengajuan") || query.includes("barang saya") || query.includes("pengajuan saya") || (query.includes("cek") && query.includes("pengajuan"))) && !query.includes("semua")) {
+    return `Untuk cek status pengajuan, buka tab <strong>Laporan</strong> di menu navigasi. Di sana tampil semua barang beserta statusnya: Pending ⏳, Disetujui ✅, Ditolak ❌, Sudah Dibeli 🛒.<br><br>Total database: <strong>${totalItems} pengajuan</strong>.`;
+  }
+  if (query.includes("ditolak") || query.includes("penolakan") || query.includes("kenapa ditolak") || query.includes("nggak disetujui")) {
+    return `Kalau pengajuan ditolak, biasanya karena pertimbangan anggaran atau kebutuhan kurang mendesak. Saat ini ada <strong>${rejectedCount} pengajuan</strong> yang ditolak.<br><br>💡 Tips: Ajukan ulang dengan keterangan yang lebih lengkap dan jelas!`;
+  }
+  if ((query.includes("lupa") || query.includes("salah") || query.includes("ganti")) && (query.includes("nomor") || query.includes("wa"))) {
+    return `Kalau nomor WA salah, minta bantuan Admin untuk edit data di panel admin ya kak. Atau ajukan ulang dengan nomor WA yang benar. 😊`;
+  }
+  if (query.includes("urgensi") || query.includes("normal atau urgent") || query.includes("pilih urgensi")) {
+    return `Ada 2 pilihan urgensi kak:<br><br>
+      • <strong>Normal</strong> — kebutuhan rutin, tidak mendesak<br>
+      • <strong>Urgent</strong> — butuh segera karena event/kegiatan dekat<br><br>
+      Saat ini ada <strong>${urgentItems.length} barang</strong> dengan status Urgent. Gunakan hanya jika benar-benar mendesak! 😊`;
+  }
+  if (query.includes("tanda tangan") || query.includes("ttd") || query.includes("signature") || query.includes("kanvas")) {
+    return `Tanda tangan digital dibuat langsung di kanvas form pengajuan kak. Klik/sentuh kanvas, gambar tanda tangan, kalau salah klik <strong>Hapus</strong> untuk ulangi. Tanda tangan ini tersimpan sebagai bukti identitas pengaju! 😊`;
+  }
+  if ((query.includes("unit") || query.includes("departemen") || query.includes("kepesantrenan") || query.includes("smk") || query.includes("smp")) && !query.includes("admin")) {
+    return `Unit yang tersedia di SPMS:<br><br>
+      • <strong>Kepesantrenan</strong> — kebutuhan asrama & pesantren<br>
+      • <strong>SMK</strong> — kebutuhan sekolah menengah kejuruan<br>
+      • <strong>SMP</strong> — kebutuhan sekolah menengah pertama<br><br>
+      ${deptList ? `Data saat ini: ${deptList}.` : ''}`;
+  }
+  if ((query.includes("sudah lama") || query.includes("lama pending") || query.includes("kapan disetujui") || query.includes("pending terus")) && !query.includes("admin")) {
+    return `Kalau pengajuan sudah lama pending, Manager/Direktur mungkin belum sempat review. Bisa ingatkan langsung via WhatsApp kak.<br><br>Saat ini ada <strong>${pendingCount} barang</strong> masih pending.`;
+  }
+  if (query.includes("lihat semua") || query.includes("daftar semua") || query.includes("semua pengajuan") || query.includes("history pengajuan")) {
+    return `Buka tab <strong>Laporan</strong> untuk melihat semua pengajuan kak. Bisa filter berdasarkan status, unit, atau cari nama barang.<br><br>
+      📊 Total: <strong>${totalItems} pengajuan</strong>:<br>${recentItems || '—'}`;
+  }
+  if ((query.includes("edit") || query.includes("ubah") || query.includes("revisi") || query.includes("ganti barang")) && (query.includes("pengajuan") || query.includes("barang"))) {
+    return `Pengajuan yang sudah dikirim tidak bisa diedit oleh Pengajuan sendiri kak. Perlu minta bantuan <strong>Admin</strong> untuk mengubah data melalui panel edit. Sampaikan perubahan yang diperlukan ke Admin! 😊`;
+  }
+  if (query.includes("batalkan") || query.includes("batal pengajuan") || query.includes("hapus pengajuan")) {
+    return `Pembatalan pengajuan dilakukan oleh <strong>Admin</strong> atau bisa meminta Manager/Direktur untuk menolak pengajuan tersebut. Pengajuan tidak bisa membatalkan sendiri. Hubungi Admin atau Manager! 😊`;
+  }
+  if (query.includes("estimasi harga") || query.includes("harga pasar") || query.includes("harga wajar") || query.includes("patokan harga")) {
+    return `Untuk estimasi harga, cek harga pasar terlebih dahulu (Tokopedia, Shopee, atau toko lokal) kak. Masukkan harga yang realistis agar mudah di-acc manajemen. Harga terlalu tinggi tanpa keterangan bisa menyebabkan pengajuan ditolak! 💡`;
+  }
+  if (query.includes("urgent tidak") || query.includes("urgent belum") || query.includes("urgent tapi") || (query.includes("urgent") && query.includes("lama"))) {
+    return `Kalau pengajuan sudah Urgent tapi belum ada respons, coba hubungi Manager/Direktur langsung via WhatsApp kak. Saat ini ada <strong>${urgentItems.length} barang Urgent</strong>. Sistem sudah kirim notif otomatis, tapi terkadang perlu follow-up manual! 📱`;
+  }
+  if (query.includes("keterangan") || query.includes("ulasan") || query.includes("catatan") || (query.includes("isi") && query.includes("tambahan"))) {
+    return `Field <strong>Ulasan/Keterangan Tambahan</strong> ada di bawah Status Urgensi dalam form pengajuan kak. Isi dengan penjelasan mengapa barang diperlukan. Keterangan jelas membantu Manager/Direktur lebih cepat menyetujui! 💡`;
+  }
+  if ((query.includes("tidak muncul") || query.includes("nggak muncul") || query.includes("hilang")) && query.includes("laporan")) {
+    return `Kalau pengajuan tidak muncul di laporan:<br><br>
+      1. Ada filter aktif — reset filter di halaman Laporan<br>
+      2. Koneksi internet terputus — coba ajukan ulang<br>
+      3. Data belum tersinkronisasi — refresh halaman dulu<br><br>
+      Hubungi Admin jika tetap tidak muncul! 😊`;
+  }
+  if (query.includes("syarat") || query.includes("kriteria") || query.includes("supaya disetujui") || query.includes("biar acc")) {
+    return `💡 <strong>Tips Agar Pengajuan Cepat Disetujui</strong>:<br><br>
+      1. Nama barang spesifik & jelas<br>
+      2. Harga estimasi realistis<br>
+      3. Urgensi sesuai kebutuhan nyata<br>
+      4. Keterangan tujuan penggunaan yang jelas<br>
+      5. Nomor WA valid<br>
+      6. Tanda tangan digital terisi jelas`;
+  }
+  if ((query.includes("barang apa") || query.includes("apa saja yang")) && query.includes("diajukan")) {
+    return `📦 <strong>Pengajuan Terbaru</strong>:<br><br>
+      ${recentItems || 'Belum ada pengajuan'}<br><br>
+      <em>Buka tab <strong>Laporan</strong> untuk melihat semua ${totalItems} pengajuan!</em>`;
+  }
+  if ((query.includes("berapa") && query.includes("pending")) || query.includes("yang belum disetujui")) {
+    return `Saat ini ada <strong>${pendingCount} barang</strong> yang masih menunggu persetujuan Manager/Direktur. ⏳<br><br>${pendingList ? `<strong>Di antaranya:</strong><br>${pendingList}` : ''}`;
+  }
+
+  // ============================================================
+  // ==================== MANAGER ===============================
+  // ============================================================
+  if ((query.includes("cara setujui") || query.includes("cara menyetujui") || query.includes("bagaimana setujui")) && !query.includes("direktur")) {
+    return `✅ <strong>Cara Manager Menyetujui Pengajuan</strong>:<br><br>
+      1. Buka tab <strong>Persetujuan</strong><br>
+      2. Lihat daftar barang Pending<br>
+      3. Tinjau nama, unit, jumlah, dan harga<br>
+      4. Klik <strong>✓ Setuju</strong><br>
+      5. Sistem kirim notif WA ke <strong>Direktur</strong> untuk acc final<br><br>
+      Saat ini ada <strong>${pendingCount} barang</strong> menunggu. ⏳`;
+  }
+  if ((query.includes("cara tolak") || query.includes("cara menolak") || query.includes("reject")) && !query.includes("direktur")) {
+    return `❌ <strong>Cara Manager Menolak Pengajuan</strong>:<br><br>
+      1. Buka tab <strong>Persetujuan</strong><br>
+      2. Temukan barang yang ingin ditolak<br>
+      3. Klik tombol <strong>✕ Tolak</strong><br>
+      4. Sistem kirim notif penolakan ke pengaju via WA<br><br>
+      Saat ini ada <strong>${rejectedCount}</strong> pengajuan yang sudah ditolak.`;
+  }
+  if ((query.includes("menunggu") || query.includes("antre") || query.includes("perlu ditinjau")) && !query.includes("direktur") && !query.includes("admin")) {
+    return `Ada <strong>${pendingCount} pengajuan</strong> menunggu ditinjau Manager saat ini. ⏳<br><br>${pendingList ? `<strong>Di antaranya:</strong><br>${pendingList}` : '—'}`;
+  }
+  if ((query.includes("detail") || query.includes("informasi barang") || query.includes("lihat dulu")) && (query.includes("sebelum") || query.includes("tinjau"))) {
+    return `Di halaman Persetujuan, Manager bisa melihat detail setiap pengajuan — nama barang, unit, jumlah, harga satuan, total estimasi, pengaju, nomor WA, urgensi, dan keterangan tambahan. Semua ada sebelum acc! 😊`;
+  }
+  if ((query.includes("notif") || query.includes("notifikasi")) && query.includes("manager")) {
+    return `Manager mendapat notif WhatsApp otomatis setiap ada pengajuan baru dari Pengajuan. Pastikan nomor WA Manager sudah diisi di menu <strong>Profil Saya</strong>! 📱`;
+  }
+  if (query.includes("acc semua") || query.includes("setuju semua") || query.includes("approve semua")) {
+    return `Persetujuan dilakukan satu per satu kak untuk memastikan setiap pengajuan ditinjau dengan teliti. Manager bisa review detail masing-masing sebelum memutuskan! 😊`;
+  }
+  if ((query.includes("urgent") || query.includes("prioritas")) && query.includes("manager")) {
+    if (urgentItems.length > 0) {
+      const urgList = urgentItems.slice(0,5).map(i=>`• <strong>${i.name}</strong> (${i.dept}) — ${i.approval||'Pending'}`).join('<br>');
+      return `⚠️ Ada <strong>${urgentItems.length} barang URGENT</strong> yang perlu diprioritaskan Manager:<br><br>${urgList}<br><br>Segera ditinjau ya kak!`;
+    }
+    return `Saat ini tidak ada barang Urgent yang pending. Semua pengajuan berstatus Normal. 😊`;
+  }
+  if ((query.includes("anggaran") || query.includes("total nilai")) && (query.includes("diajukan") || query.includes("pending") || query.includes("review"))) {
+    const pendingRupiah = items.filter(i=>(i.approval||'Pending')==='Pending').reduce((s,i)=>s+((parseFloat(i.price)||0)*(parseInt(i.qty)||1)),0);
+    return `Total estimasi anggaran dari <strong>${pendingCount} pengajuan pending</strong>:<br><br><strong>Rp ${pendingRupiah.toLocaleString('id-ID')}</strong><br><br>Informasi ini bisa jadi pertimbangan Manager sebelum melakukan persetujuan. 💡`;
+  }
+  if (query.includes("dari unit") || query.includes("per unit") || query.includes("per departemen") || query.includes("masing masing unit")) {
+    return `📊 <strong>Pengajuan Per Unit</strong>:<br><br>
+      ${Object.entries(deptCounts).map(([d,c]) => {
+        const unitRupiah = items.filter(i=>i.dept===d).reduce((s,i)=>s+((parseFloat(i.price)||0)*(parseInt(i.qty)||1)),0);
+        return `• <strong>${d}</strong>: ${c} barang — Rp ${unitRupiah.toLocaleString('id-ID')}`;
+      }).join('<br>') || '— Belum ada data —'}`;
+  }
+  if ((query.includes("sudah disetujui") || query.includes("yang di acc") || query.includes("history acc")) && !query.includes("direktur")) {
+    const accList = items.filter(i=>i.approval==='Disetujui'||i.approval==='Disetujui Direktur').slice(0,5).map(i=>`• <strong>${i.name}</strong> (${i.dept}) — ${i.pembelian==='Sudah Dibeli'?'Sudah Dibeli 🛒':'Menunggu Dibeli ⏳'}`).join('<br>');
+    return `✅ <strong>${approvedCount} pengajuan</strong> sudah disetujui manajemen:<br><br>${accList || '—'}<br><br>${boughtCount} sudah dibeli, ${belumCount} masih menunggu pembelian Admin.`;
+  }
+  if (query.includes("kewenangan manager") || query.includes("wewenang manager") || query.includes("tugas manager")) {
+    return `👔 <strong>Peran Manager di SPMS</strong>:<br><br>
+      • <strong>Review</strong> setiap pengajuan dari Pengajuan<br>
+      • <strong>Setujui</strong> atau <strong>Tolak</strong> pengajuan<br>
+      • Setelah acc Manager, lanjut ke <strong>Direktur</strong> untuk acc final<br>
+      • Menerima notif WA setiap ada pengajuan baru<br><br>
+      Manager adalah filter pertama sebelum ke Direktur! 💡`;
+  }
+  if ((query.includes("tidak sampai") || query.includes("belum terima") || query.includes("nggak dapat notif")) && query.includes("manager")) {
+    return `Kalau notif tidak sampai ke Manager:<br><br>
+      1. Nomor WA Manager belum diisi di <strong>Profil Saya</strong><br>
+      2. Format nomor salah (harus diawali 62, tanpa +)<br>
+      3. Koneksi Fonnte API bermasalah<br><br>
+      Cek profil Manager dan pastikan nomor WA sudah benar! 📱`;
+  }
+  if (query.includes("nama pengaju") || query.includes("siapa yang ajukan") || query.includes("pengaju siapa")) {
+    const penList = [...new Set(items.map(i=>i.pengaju).filter(Boolean))].slice(0,8).join(', ');
+    return `Pengaju di database saat ini: <strong>${penList || '—'}</strong><br><br>Detail pengaju bisa dilihat di tab <strong>Laporan</strong> maupun <strong>Persetujuan</strong>. 😊`;
+  }
+  if (query.includes("pengajuan baru") || query.includes("ada baru") || query.includes("masuk pengajuan")) {
+    return `Ada <strong>${pendingCount} pengajuan</strong> menunggu review Manager saat ini. ⏳<br><br>${pendingList || 'Tidak ada detail.'}<br><br>Segera tinjau di tab <strong>Persetujuan</strong>! 😊`;
+  }
+  if (query.includes("berapa ditolak") || query.includes("total tolak") || query.includes("sudah berapa yang ditolak")) {
+    return `Sampai saat ini ada <strong>${rejectedCount} pengajuan</strong> yang ditolak oleh manajemen. ❌ Pengaju mendapat notif WA otomatis saat pengajuannya ditolak.`;
+  }
+  if ((query.includes("hp") || query.includes("handphone") || query.includes("ponsel") || query.includes("mobile")) && query.includes("setuju")) {
+    return `Bisa kak! SPMS bisa diakses dari HP via browser. Buka website SPMS → tab <strong>Persetujuan</strong> — tampilannya responsif untuk layar kecil. 📱`;
+  }
+  if (query.includes("minta revisi") || query.includes("revisi ke inventaris") || (query.includes("kembalikan") && query.includes("pengajuan"))) {
+    return `Belum ada fitur "Kembalikan untuk Revisi" otomatis. Manager bisa <strong>menolak</strong> pengajuan, lalu hubungi pengaju via WA untuk minta revisi dan ajukan ulang. 💡`;
+  }
+  if ((query.includes("total anggaran") || query.includes("keseluruhan anggaran") || query.includes("semua anggaran")) && !query.includes("pending")) {
+    return `📊 <strong>Anggaran Keseluruhan</strong>:<br><br>
+      • Total estimasi seluruh pengajuan: <strong>Rp ${totalRupiah.toLocaleString('id-ID')}</strong><br>
+      • Sudah terealisasi (dibeli): <strong>Rp ${boughtRupiah.toLocaleString('id-ID')}</strong><br>
+      • Sisa yang belum dibeli: <strong>Rp ${(totalRupiah - boughtRupiah).toLocaleString('id-ID')}</strong>`;
+  }
+  if (query.includes("update profil") || query.includes("ganti profil") || query.includes("edit profil") || query.includes("ubah profil")) {
+    return `👤 <strong>Cara Update Profil</strong>:<br><br>
+      1. Buka tab <strong>Profil Saya</strong><br>
+      2. Perbarui nama lengkap & nomor WhatsApp<br>
+      3. Perbarui tanda tangan digital jika perlu<br>
+      4. Klik <strong>Simpan Profil & Tanda Tangan</strong><br><br>
+      <em>Nomor WA di profil digunakan untuk menerima notifikasi sistem!</em>`;
+  }
+
+  // ============================================================
+  // ==================== DIREKTUR ==============================
+  // ============================================================
+  if (query.includes("peran direktur") || query.includes("tugas direktur") || query.includes("wewenang direktur")) {
+    return `🏛️ <strong>Peran Direktur di SPMS</strong>:<br><br>
+      • Pemegang keputusan <strong>FINAL</strong> atas setiap pengajuan barang<br>
+      • Menerima notif WA setelah Manager acc<br>
+      • Klik <strong>Setujui Final</strong> untuk persetujuan penuh<br>
+      • Setelah Direktur acc, Admin langsung diberi notif untuk beli barang<br><br>
+      Tanpa acc Direktur, Admin tidak bisa beli barang! 💡`;
+  }
+  if (query.includes("cara direktur") || (query.includes("direktur") && (query.includes("acc") || query.includes("setujui") || query.includes("persetujuan")))) {
+    return `🏛️ <strong>Cara Direktur Memberikan Persetujuan Final</strong>:<br><br>
+      1. Buka tab <strong>Persetujuan</strong><br>
+      2. Lihat pengajuan yang sudah di-acc Manager<br>
+      3. Tinjau kebutuhan dan anggaran<br>
+      4. Klik <strong>✓ Setujui Final</strong><br>
+      5. Admin langsung menerima notif WA untuk membeli<br><br>
+      <em>Saat ini ada ${pendingCount} pengajuan dalam proses.</em>`;
+  }
+  if (query.includes("kenapa ada direktur") || query.includes("mengapa direktur") || query.includes("fungsi direktur")) {
+    return `Direktur ada sebagai <strong>pengawas anggaran tertinggi</strong>. Setelah Manager acc dari sisi kebutuhan, Direktur memberikan persetujuan dari sisi anggaran & kebijakan sekolah. Ini memastikan tidak ada pembelian tanpa otorisasi level tertinggi! 💡`;
+  }
+  if ((query.includes("notif") || query.includes("notifikasi")) && query.includes("direktur")) {
+    return `Direktur menerima notif WhatsApp otomatis <strong>setelah Manager menyetujui</strong>. Notif berisi: nama barang, unit, jumlah, harga, dan pengaju. Pastikan nomor WA Direktur diisi di <strong>Profil Saya</strong>! 📱`;
+  }
+  if ((query.includes("anggaran") || query.includes("nilai")) && query.includes("direktur")) {
+    const accManagerRupiah = items.filter(i=>i.approval==='Disetujui').reduce((s,i)=>s+((parseFloat(i.price)||0)*(parseInt(i.qty)||1)),0);
+    return `📊 <strong>Ringkasan Anggaran untuk Direktur</strong>:<br><br>
+      • Sudah acc Manager & perlu acc Direktur: <strong>Rp ${accManagerRupiah.toLocaleString('id-ID')}</strong><br>
+      • Total semua pengajuan: <strong>Rp ${totalRupiah.toLocaleString('id-ID')}</strong><br>
+      • Sudah terealisasi: <strong>Rp ${boughtRupiah.toLocaleString('id-ID')}</strong>`;
+  }
+  if (query.includes("direktur tolak") || query.includes("tolak setelah manager") || (query.includes("tolak") && query.includes("direktur"))) {
+    return `Ya bisa kak! Direktur bisa menolak pengajuan meskipun sudah di-acc Manager. Klik <strong>✕ Tolak</strong> dan pengaju mendapat notif WA bahwa pengajuannya tidak lolos persetujuan Direktur. 💡`;
+  }
+  if (query.includes("sudah final") || query.includes("acc direktur") || query.includes("disetujui direktur")) {
+    const dirAcc = items.filter(i=>i.approval==='Disetujui Direktur').length;
+    return `Total yang sudah mendapat <strong>persetujuan final Direktur</strong>: <strong>${dirAcc} barang</strong>. Dari jumlah itu, ${boughtCount} sudah dibeli Admin. 🎉`;
+  }
+  if ((query.includes("review") || query.includes("tinjau")) && (query.includes("unit") || query.includes("departemen"))) {
+    return `📊 <strong>Anggaran Per Unit untuk Review Direktur</strong>:<br><br>
+      ${Object.entries(deptCounts).map(([d,c]) => {
+        const unitRupiah = items.filter(i=>i.dept===d).reduce((s,i)=>s+((parseFloat(i.price)||0)*(parseInt(i.qty)||1)),0);
+        const unitBought = items.filter(i=>i.dept===d && i.pembelian==='Sudah Dibeli').length;
+        return `• <strong>${d}</strong>: ${c} barang | Anggaran: Rp ${unitRupiah.toLocaleString('id-ID')} | Dibeli: ${unitBought}`;
+      }).join('<br>') || '— Belum ada data —'}`;
+  }
+  if (query.includes("urutan") && (query.includes("acc") || query.includes("persetujuan"))) {
+    return `🔄 <strong>Urutan Persetujuan SPMS</strong>:<br><br>
+      <strong>1. Manager</strong> → review awal & setujui<br>
+      <strong>2. Direktur</strong> → persetujuan final<br>
+      <strong>3. Admin</strong> → eksekusi pembelian<br><br>
+      Setiap tahap harus dilalui secara berurutan! 💡`;
+  }
+  if ((query.includes("akses") || query.includes("login") || query.includes("masuk")) && query.includes("direktur")) {
+    return `Direktur mengakses SPMS via browser — buka website SPMS, navigasi ke tab <strong>Persetujuan</strong>. Tidak ada login terpisah. Pastikan profil (nama & nomor WA) sudah diisi! 😊`;
+  }
+  if ((query.includes("laporan") || query.includes("report")) && query.includes("direktur")) {
+    return `📊 Buka tab <strong>Laporan</strong> untuk rekap lengkap semua pengajuan. Direktur bisa filter per unit, status, atau tanggal untuk evaluasi pengadaan.<br><br>
+      Data: ${totalItems} pengajuan | Rp ${totalRupiah.toLocaleString('id-ID')} total anggaran.`;
+  }
+  if ((query.includes("tidak dapat") || query.includes("belum terima") || query.includes("nggak masuk")) && query.includes("notif") && query.includes("direktur")) {
+    return `Kalau Direktur tidak terima notif WA:<br><br>
+      1. Nomor WA Direktur belum diisi/salah di <strong>Profil Saya</strong><br>
+      2. Format harus diawali <strong>62</strong> (tanpa +)<br>
+      3. Manager belum acc pengajuannya (notif ke Direktur dikirim setelah Manager acc)<br><br>
+      Cek profil terlebih dahulu! 📱`;
+  }
+  if (query.includes("transparan") || query.includes("transparansi") || query.includes("audit") || query.includes("evaluasi pengadaan")) {
+    return `📊 SPMS dirancang untuk transparansi penuh. Direktur bisa melihat:<br><br>
+      • Semua pengajuan dengan detail lengkap<br>
+      • Siapa pengaju, unit mana, harga berapa<br>
+      • Status real-time setiap pengajuan<br>
+      • Total anggaran terealisasi vs pending<br><br>
+      Semua terdokumentasi digital! 💡`;
+  }
+  if ((query.includes("hapus") || query.includes("delete")) && query.includes("direktur")) {
+    return `Penghapusan data dilakukan oleh <strong>Admin</strong> kak, bukan Direktur. Direktur hanya memiliki akses untuk menyetujui atau menolak. Ini menjaga integritas data! 💡`;
+  }
+  if ((query.includes("belum dibeli") || query.includes("sudah acc tapi belum")) && (query.includes("direktur") || query.includes("perlu dibeli"))) {
+    return `Saat ini ada <strong>${belumCount} barang</strong> yang sudah dapat persetujuan manajemen namun <strong>belum dibeli Admin</strong>. ⚠️<br><br>
+      ${belumList ? `<strong>Di antaranya:</strong><br>${belumList}` : ''}<br><br>
+      Hubungi Admin untuk segera proses pembelian! 🛒`;
+  }
+  if (query.includes("siapa saja pengaju") || query.includes("daftar pengaju") || (query.includes("siapa yang ajukan") && query.includes("direktur"))) {
+    const penList2 = [...new Set(items.map(i=>i.pengaju).filter(Boolean))].join(', ');
+    return `Daftar pengaju: <strong>${penList2 || '—'}</strong><br><br>Detail lengkap di tab <strong>Laporan</strong>, termasuk nomor WA masing-masing. 😊`;
+  }
+  if (query.includes("perbedaan") && (query.includes("manager") || query.includes("direktur"))) {
+    return `📌 <strong>Perbedaan Manager & Direktur</strong>:<br><br>
+      <strong>Manager:</strong><br>
+      • Review pertama dari sisi kebutuhan operasional<br>
+      • Persetujuan awal (bukan final)<br><br>
+      <strong>Direktur:</strong><br>
+      • Persetujuan FINAL dari sisi anggaran & kebijakan<br>
+      • Tanpa acc Direktur, Admin tidak bisa beli<br><br>
+      Keduanya mendapat notif WA di tahap masing-masing! 💡`;
+  }
+
+  // ============================================================
+  // ==================== ADMIN =================================
+  // ============================================================
+  if ((query.includes("tandai") && query.includes("dibeli")) || (query.includes("cara") && query.includes("beli") && query.includes("admin"))) {
+    return `🛒 <strong>Cara Admin Memproses Pembelian</strong>:<br><br>
+      1. Login ke portal <strong>Admin</strong> (admin.html)<br>
+      2. Buka menu <strong>Pembelian Barang</strong><br>
+      3. Lihat daftar barang berstatus <em>Disetujui</em><br>
+      4. Klik <strong>Tandai Sudah Dibeli</strong> setelah barang berhasil dibeli<br>
+      5. Sistem kirim notif WA ke pengaju otomatis 🎉<br><br>
+      <em>Saat ini ada <strong>${belumCount} barang</strong> menunggu pembelian!</em>`;
+  }
+  if ((query.includes("harus dibeli") || query.includes("perlu dibeli") || query.includes("tugas beli") || query.includes("antrian beli")) && !query.includes("direktur")) {
+    return `Saat ini ada <strong>${belumCount} barang</strong> yang sudah di-acc manajemen dan menunggu pembelian Admin. 🛒<br><br>
+      ${belumList ? `<strong>Di antaranya:</strong><br>${belumList}` : 'Tidak ada detail.'}<br><br>Segera proses pembelian ya kak!`;
+  }
+  if ((query.includes("edit") || query.includes("ubah data") || query.includes("perbaiki data")) && query.includes("admin")) {
+    return `✏️ <strong>Cara Admin Edit Data Barang</strong>:<br><br>
+      1. Buka halaman <strong>admin.html</strong><br>
+      2. Cari barang yang ingin diedit<br>
+      3. Klik tombol <strong>Edit</strong><br>
+      4. Ubah data yang diperlukan<br>
+      5. Klik <strong>Simpan Perubahan</strong><br><br>
+      Admin memiliki akses penuh untuk mengedit semua data! 💡`;
+  }
+  if ((query.includes("hapus") || query.includes("delete")) && query.includes("admin")) {
+    return `🗑️ <strong>Cara Admin Hapus Data</strong>:<br><br>
+      1. Buka halaman <strong>admin.html</strong><br>
+      2. Cari barang yang ingin dihapus<br>
+      3. Klik tombol <strong>Hapus</strong><br>
+      4. Konfirmasi penghapusan<br><br>
+      ⚠️ <em>Data yang dihapus tidak bisa dikembalikan!</em>`;
+  }
+  if ((query.includes("lihat semua") || query.includes("tampilkan semua")) && query.includes("admin")) {
+    return `Admin bisa melihat seluruh data dari menu di halaman admin.html:<br><br>
+      • <strong>Semua Barang</strong> — daftar lengkap seluruh pengajuan<br>
+      • <strong>Pembelian Barang</strong> — hanya yang perlu dibeli<br>
+      • <strong>Laporan</strong> — rekap dengan filter & statistik<br><br>
+      Total saat ini: <strong>${totalItems} barang</strong>. 📊`;
+  }
+  if ((query.includes("tambah") || query.includes("input")) && query.includes("admin") && query.includes("barang")) {
+    return `Admin juga bisa input pengajuan barang langsung dari panel admin kak! Klik <strong>+ Tambah Barang</strong> di halaman admin. Berguna untuk pengajuan darurat yang tidak sempat diinput Pengajuan. 😊`;
+  }
+  if ((query.includes("notif") || query.includes("notifikasi")) && query.includes("admin")) {
+    return `Admin mendapat notif WA otomatis <strong>setelah Direktur memberikan persetujuan final</strong>. Notif berisi nama barang, unit, jumlah, harga, dan pengaju. Pastikan nomor WA Admin diisi di <strong>Profil Admin</strong>! 📱`;
+  }
+  if ((query.includes("sudah dibeli") || query.includes("berhasil dibeli") || query.includes("realisasi")) && !query.includes("direktur")) {
+    return `🛒 Admin sudah menyelesaikan pembelian <strong>${boughtCount} barang</strong> dengan total nilai realisasi <strong>Rp ${boughtRupiah.toLocaleString('id-ID')}</strong>.<br><br>Masih ada <strong>${belumCount} barang</strong> yang perlu segera dibeli!`;
+  }
+  if ((query.includes("konfirmasi") || query.includes("kabari") || query.includes("beritahu pengaju")) && query.includes("admin")) {
+    return `Konfirmasi pembelian dikirim <strong>otomatis</strong> via WA ke pengaju saat Admin klik <strong>Tandai Sudah Dibeli</strong>. Tidak perlu kirim manual! 📱🎉`;
+  }
+  if (query.includes("profil admin") || (query.includes("profil saya") && query.includes("admin"))) {
+    return `👤 Admin juga punya profil di SPMS. Buka tab <strong>Profil Saya</strong> di halaman admin untuk isi:<br><br>
+      • Nama lengkap Admin<br>
+      • Nomor WhatsApp (penting untuk terima notif dari Direktur)<br>
+      • Tanda tangan digital<br><br>
+      Klik <strong>Simpan Profil & Tanda Tangan</strong> setelah diisi! 😊`;
+  }
+  if ((query.includes("filter") || query.includes("cari") || query.includes("sortir")) && query.includes("admin")) {
+    return `Admin bisa filter data berdasarkan:<br><br>
+      • <strong>Status</strong>: Pending, Disetujui, Ditolak, Sudah Dibeli<br>
+      • <strong>Unit</strong>: Kepesantrenan, SMK, SMP<br>
+      • <strong>Urgensi</strong>: Normal, Urgent<br>
+      • <strong>Pencarian nama barang</strong><br><br>
+      Sangat memudahkan saat database sudah banyak! 💡`;
+  }
+  if (query.includes("cetak") || query.includes("print") || query.includes("ekspor") || query.includes("download laporan")) {
+    return `Untuk cetak laporan, Admin bisa gunakan fitur print browser (Ctrl+P) saat di halaman <strong>Laporan</strong>. Tampilan sudah dioptimalkan untuk dicetak. Bisa juga screenshot untuk arsip cepat! 📄`;
+  }
+  if ((query.includes("tidak bisa akses") || query.includes("error") || query.includes("blank") || query.includes("tidak terbuka")) && query.includes("admin")) {
+    return `Kalau halaman admin.html tidak bisa diakses, coba:<br><br>
+      1. Refresh halaman (Ctrl+R atau F5)<br>
+      2. Bersihkan cache browser<br>
+      3. Pastikan koneksi internet stabil<br>
+      4. Coba browser lain<br><br>
+      Hubungi developer jika berlanjut! 💡`;
+  }
+  if (query.includes("perbedaan") && (query.includes("admin") || query.includes("inventaris"))) {
+    return `📌 <strong>Perbedaan Admin & Pengajuan</strong>:<br><br>
+      <strong>Pengajuan:</strong><br>
+      • Input pengajuan barang<br>
+      • Tidak bisa edit/hapus setelah dikirim<br><br>
+      <strong>Admin:</strong><br>
+      • Eksekusi pembelian barang yang sudah di-acc<br>
+      • Bisa edit/hapus semua data<br>
+      • Akses penuh ke semua fitur panel admin 💡`;
+  }
+  if ((query.includes("ubah status") || query.includes("ganti status") || query.includes("override status")) && query.includes("admin")) {
+    return `Admin bisa mengubah status pengajuan secara manual dari panel edit di halaman admin. Bisa ubah status persetujuan maupun pembelian. Gunakan dengan hati-hati agar data tetap akurat! 💡`;
+  }
+  if (query.includes("nomor wa admin") || query.includes("wa admin") || query.includes("whatsapp admin")) {
+    return `Nomor WA Admin digunakan sistem untuk mengirim notif saat ada barang yang sudah di-acc Direktur. Isi nomor WA Admin di <strong>Profil Saya → admin.html</strong> dengan format tanpa + (misal: 628123456789). 📱`;
+  }
+  if ((query.includes("laporan keuangan") || query.includes("rekap keuangan") || query.includes("pengeluaran")) && query.includes("admin")) {
+    return `📊 <strong>Rekap Keuangan Pembelian Admin</strong>:<br><br>
+      • Total nilai semua pengajuan: <strong>Rp ${totalRupiah.toLocaleString('id-ID')}</strong><br>
+      • Sudah terealisasi: <strong>Rp ${boughtRupiah.toLocaleString('id-ID')}</strong><br>
+      • Belum terealisasi: <strong>Rp ${(totalRupiah - boughtRupiah).toLocaleString('id-ID')}</strong><br>
+      • Barang sudah dibeli: <strong>${boughtCount} barang</strong>`;
+  }
+  if ((query.includes("kirim wa") || query.includes("hubungi pengaju") || query.includes("wa pengaju")) && query.includes("admin")) {
+    return `Di halaman Laporan, setiap baris pengajuan ada link WA pengaju yang bisa diklik langsung. Admin bisa langsung chat pengaju via WhatsApp tanpa perlu catat nomornya! 📱`;
+  }
+  if (query.includes("sheetdb") || query.includes("database") || query.includes("sync data") || query.includes("data tersinkron")) {
+    return `SPMS menyimpan data ke <strong>SheetDB</strong> (Google Sheets sebagai database) secara real-time. Setiap pengajuan, persetujuan, dan pembelian otomatis tersinkronisasi. Kalau data tidak muncul, refresh halaman untuk tarik data terbaru! 💡`;
+  }
+  if ((query.includes("banyak pengajuan") || query.includes("kewalahan") || query.includes("kelola banyak")) && query.includes("admin")) {
+    return `💡 Tips Admin kelola banyak pengajuan sekaligus:<br><br>
+      1. Gunakan <strong>filter status</strong> untuk tampilkan yang perlu dibeli saja<br>
+      2. Urutkan berdasarkan <strong>Urgent</strong> untuk prioritaskan yang mendesak<br>
+      3. Klik link WA pengaju untuk koordinasi langsung<br>
+      4. Tandai sudah dibeli segera setelah pembelian<br><br>
+      Saat ini ada <strong>${belumCount} barang</strong> yang perlu diproses! 🛒`;
+  }
+
+  // ===== PENCARIAN DATABASE REAL-TIME =====
+  const matchedItems = items.filter(i =>
+    i.name.toLowerCase().includes(query) ||
+    i.dept.toLowerCase().includes(query) ||
+    (i.pengaju || '').toLowerCase().includes(query) ||
+    (i.urgency || '').toLowerCase().includes(query)
+  );
+
+  if (matchedItems.length > 0) {
+    const matchedList = matchedItems.slice(0, 8).map(i =>
+      `• <strong>${i.name}</strong> (${i.dept}) — ${i.qty} Pcs @ Rp ${(parseFloat(i.price)||0).toLocaleString('id-ID')} | Status: <em>${i.pembelian === 'Sudah Dibeli' ? 'Sudah Dibeli 🛒' : i.approval || 'Pending'}</em>`
+    ).join('<br>');
+    const totalVal = matchedItems.reduce((s, x) => s + ((parseFloat(x.price)||0) * (parseInt(x.qty)||1)), 0);
+    return `🔍 <strong>Hasil Pencarian: "${escapeHtml(text)}"</strong><br><br>
+      Ditemukan <strong>${matchedItems.length} barang</strong>:<br><br>
+      ${matchedList}<br><br>
+      <em>Total nilai: Rp ${totalVal.toLocaleString('id-ID')}</em>`;
+  }
+
+  // ===== DEFAULT =====
+  return `Hmm, belum punya jawaban spesifik untuk itu kak. 😊 Coba tanyakan:<br><br>
+    • <em>Cara ajukan / setujui / beli barang</em><br>
+    • <em>Berapa barang pending / sudah dibeli</em><br>
+    • <em>Total anggaran / rekap per unit</em><br>
+    • <em>Peran admin / manager / direktur</em><br>
+    • Atau ketik nama barang untuk dicari di database!`;
+}
+
+
