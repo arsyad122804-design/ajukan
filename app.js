@@ -1373,10 +1373,46 @@ function handleAdminSignatureConfirm(e) {
   }
 }
 
-// Delegated Admin Signature Form Submit Handler
-document.addEventListener("submit", (e) => {
+// Delegated Form Submit Handlers
+document.addEventListener("submit", async (e) => {
+  // 1. Admin Signature Confirm
   if (e.target && e.target.id === "form-admin-signature") {
     handleAdminSignatureConfirm(e);
+  }
+  
+  // 2. Edit Item Form
+  if (e.target && e.target.id === "form-edit-item") {
+    e.preventDefault();
+    const id = document.getElementById("edit-item-id").value;
+    const item = items.find(i => i.id == id);
+    if (!item) return;
+
+    item.name = document.getElementById("edit-item-name").value;
+    item.dept = document.getElementById("edit-item-dept").value;
+    item.qty = parseInt(document.getElementById("edit-item-qty").value) || 1;
+    item.price = parseFloat(document.getElementById("edit-item-price").value) || 0;
+    item.urgency = document.getElementById("edit-item-urgency").value;
+
+    closeEditItemModal();
+    updateUI();
+    showToast(`✅ Data "${item.name}" berhasil diperbarui!`);
+
+    try {
+      await fetch(`${SUPABASE_URL}?id=eq.${id}`, {
+        method: 'PATCH',
+        headers: API_HEADERS,
+        body: JSON.stringify({
+          nama_barang: item.name,
+          departemen: item.dept,
+          jumlah: item.qty,
+          harga: item.price,
+          urgensi: item.urgency,
+          ulasan: item.ulasan || ""
+        })
+      });
+    } catch (err) {
+      console.warn("Gagal sync edit ke SheetDB", err);
+    }
   }
 });
 
@@ -1823,46 +1859,11 @@ window.addEventListener("DOMContentLoaded", () => {
   // --- Edit Modal Handlers ---
   const btnCloseEdit = document.getElementById("btn-close-edit-modal");
   const btnCancelEdit = document.getElementById("btn-cancel-edit-modal");
-  const formEditItem = document.getElementById("form-edit-item");
 
   if (btnCloseEdit) btnCloseEdit.addEventListener("click", closeEditItemModal);
   if (btnCancelEdit) btnCancelEdit.addEventListener("click", closeEditItemModal);
 
-  if (formEditItem) {
-    formEditItem.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const id = document.getElementById("edit-item-id").value;
-      const item = items.find(i => i.id == id);
-      if (!item) return;
-
-      item.name = document.getElementById("edit-item-name").value;
-      item.dept = document.getElementById("edit-item-dept").value;
-      item.qty = parseInt(document.getElementById("edit-item-qty").value) || 1;
-      item.price = parseFloat(document.getElementById("edit-item-price").value) || 0;
-      item.urgency = document.getElementById("edit-item-urgency").value;
-
-      closeEditItemModal();
-      updateUI();
-      showToast(`✅ Data "${item.name}" berhasil diperbarui!`);
-
-      try {
-        await fetch(`${SUPABASE_URL}?id=eq.${id}`, {
-          method: 'PATCH',
-          headers: API_HEADERS,
-          body: JSON.stringify({
-            nama_barang: item.name,
-            departemen: item.dept,
-            jumlah: item.qty,
-            harga: item.price,
-            urgensi: item.urgency,
-            ulasan: item.ulasan || ""
-          })
-        });
-      } catch (err) {
-        console.warn("Gagal sync edit ke SheetDB", err);
-      }
-    });
-  }
+  // Edit Item Form is now handled by a global delegated listener below
 
   // --- Initialize AI Assistant ---
   initAiAssistant();
