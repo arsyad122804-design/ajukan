@@ -2,9 +2,8 @@
   "name": "school-procurement",
   "version": "1.0.0",
   "description": "School Procurement System with downloadable Desktop App",
-  "main": "main.js",
   "scripts": {
-    "dev": "electron .",
+    "dev": "electron main.js",
     "serve": "node local-server.js",
     "build:exe": "electron-builder --win portable",
     "build:desktop": "electron-packager . SchoolProcurement --platform=win32 --arch=x64 --out=dist/build --overwrite && node zip-desktop.js"
