@@ -2583,3 +2583,17 @@ function generateSmartAiResponse(text) {
 }
 
 
+ 
+ / /   A u t o - i n j e c t   d a t a - l a b e l   f o r   m o b i l e   r e s p o n s i v e   t a b l e s  
+ c o n s t   t a b l e O b s e r v e r   =   n e w   M u t a t i o n O b s e r v e r ( ( )   = >   {  
+     d o c u m e n t . q u e r y S e l e c t o r A l l ( ' t a b l e ' ) . f o r E a c h ( t a b l e   = >   {  
+         c o n s t   h e a d e r s   =   A r r a y . f r o m ( t a b l e . q u e r y S e l e c t o r A l l ( ' t h e a d   t h ' ) ) . m a p ( t h   = >   t h . t e x t C o n t e n t . t r i m ( ) ) ;  
+         t a b l e . q u e r y S e l e c t o r A l l ( ' t b o d y   t r ' ) . f o r E a c h ( t r   = >   {  
+             A r r a y . f r o m ( t r . q u e r y S e l e c t o r A l l ( ' t d ' ) ) . f o r E a c h ( ( t d ,   i )   = >   {  
+                 i f   ( h e a d e r s [ i ]   & &   ! t d . h a s A t t r i b u t e ( ' d a t a - l a b e l ' ) )   t d . s e t A t t r i b u t e ( ' d a t a - l a b e l ' ,   h e a d e r s [ i ] ) ;  
+             } ) ;  
+         } ) ;  
+     } ) ;  
+ } ) ;  
+ t a b l e O b s e r v e r . o b s e r v e ( d o c u m e n t . b o d y ,   {   c h i l d L i s t :   t r u e ,   s u b t r e e :   t r u e   } ) ;  
+ 

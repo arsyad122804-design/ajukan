@@ -2459,4 +2459,16 @@ body.role-staff .col-aksi {
     justify-content: center;
     padding: 10px;
   }
+  
+  /* Add labels to mobile rows based on data-label injected by JS */
+  .admin-table td::before, .custom-table td::before, .submission-table td::before {
+    content: attr(data-label);
+    font-weight: 600;
+    color: #64748b;
+    font-size: 13px;
+    text-transform: uppercase;
+    margin-right: auto;
+    padding-right: 15px;
+    text-align: left;
+  }
 }
