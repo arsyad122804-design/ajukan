@@ -320,7 +320,7 @@ const tableEmptyState   = document.getElementById("table-empty-state");
 const searchBar         = document.getElementById("search-bar");
 const filterDept        = document.getElementById("filter-dept");
 const filterUrgency     = document.getElementById("filter-urgency");
-const btnExportCSV      = document.getElementById("btn-export-csv");
+const btnExportPDF      = document.getElementById("btn-export-pdf");
 const btnAddReport      = document.getElementById("btn-add-report");
 
 // Streams
@@ -446,6 +446,15 @@ function updateUI() {
       var(--clr-blue) ${pctK}% ${pctK + pctSMK}%,
       var(--clr-green) ${pctK + pctSMK}% 100%
     )`;
+  }
+
+  if (btnExportPDF) {
+    const session = JSON.parse(sessionStorage.getItem("spms_user") || "{}");
+    if (session.role === "admin") {
+      btnExportPDF.style.display = "none";
+    } else {
+      btnExportPDF.style.display = "flex";
+    }
   }
 
   renderTable();
@@ -1388,25 +1397,89 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 // =====================================================
-// EXPORT CSV
 // =====================================================
-if (btnExportCSV) {
-  btnExportCSV.addEventListener("click", () => {
+// EXPORT PDF LAPORAN BULANAN
+// =====================================================
+if (btnExportPDF) {
+  btnExportPDF.addEventListener("click", () => {
     if (items.length === 0) { showToast("Tidak ada data untuk diekspor!"); return; }
+    if (!window.jspdf || !window.jspdf.jsPDF) { showToast("Tunggu sebentar, sedang memuat pembuat PDF..."); return; }
 
-    let csv = "data:text/csv;charset=utf-8,";
-    csv += "ID,Nama Barang,Departemen,Jumlah,Harga Satuan,Total Harga,Status,Batas Stok\r\n";
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    const session = JSON.parse(sessionStorage.getItem("spms_user") || "{}");
+    const docTitle = "Laporan Pengajuan Barang SPMS";
+    const printedBy = "Dicetak oleh: " + (session.name || session.role || "Sistem");
 
+    // Grouping by Month
+    const monthlyData = {};
     items.forEach(i => {
-      csv += [i.id, `"${i.name}"`, `"${i.dept}"`, i.qty, i.price, i.qty * i.price, i.urgency, i.minStock].join(",") + "\r\n";
+      // Tanggal format is usually "8 Agu 2026"
+      const dateParts = (i.tanggal || "").split(" ");
+      let monthYear = "Bulan Tidak Diketahui";
+      if (dateParts.length >= 3) {
+        monthYear = dateParts[1] + " " + dateParts[2];
+      }
+      
+      if (!monthlyData[monthYear]) {
+        monthlyData[monthYear] = { countPengajuan: 0, countBarang: 0, totalAnggaran: 0 };
+      }
+      monthlyData[monthYear].countPengajuan++;
+      monthlyData[monthYear].countBarang += parseInt(i.qty) || 0;
+      monthlyData[monthYear].totalAnggaran += (parseFloat(i.price) || 0) * (parseInt(i.qty) || 0);
     });
 
-    const a = document.createElement("a");
-    a.setAttribute("href", encodeURI(csv));
-    a.setAttribute("download", "SPMS-Laporan-Pengadaan.csv");
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    // Draw Title
+    doc.setFontSize(16);
+    doc.text(docTitle, 14, 20);
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    doc.text(printedBy + " | Tanggal: " + new Date().toLocaleDateString('id-ID'), 14, 26);
+
+    // Summary Table Data
+    const summaryHead = [["Bulan", "Jml Pengajuan", "Jml Pcs Barang", "Total Anggaran"]];
+    const summaryBody = Object.keys(monthlyData).map(k => [
+      k, 
+      monthlyData[k].countPengajuan, 
+      monthlyData[k].countBarang, 
+      "Rp " + monthlyData[k].totalAnggaran.toLocaleString('id-ID')
+    ]);
+
+    doc.autoTable({
+      startY: 32,
+      head: summaryHead,
+      body: summaryBody,
+      theme: 'grid',
+      headStyles: { fillColor: [2, 132, 199] },
+      margin: { top: 10 }
+    });
+
+    // Detail Table Data
+    doc.setFontSize(12);
+    doc.setTextColor(40);
+    doc.text("Detail Semua Pengajuan", 14, doc.lastAutoTable.finalY + 12);
+
+    const detailHead = [["Tanggal", "Nama Barang", "Dept", "Qty", "Harga Satuan", "Status"]];
+    const detailBody = items.map(i => [
+      i.tanggal || "-",
+      i.name || "-",
+      i.dept || "-",
+      i.qty || "0",
+      "Rp " + (parseFloat(i.price)||0).toLocaleString('id-ID'),
+      i.approval || "Pending"
+    ]);
+
+    doc.autoTable({
+      startY: doc.lastAutoTable.finalY + 16,
+      head: detailHead,
+      body: detailBody,
+      theme: 'striped',
+      headStyles: { fillColor: [51, 65, 85] },
+      styles: { fontSize: 8 },
+      margin: { top: 10 }
+    });
+
+    doc.save("SPMS-Laporan-Bulanan.pdf");
   });
 }
 
