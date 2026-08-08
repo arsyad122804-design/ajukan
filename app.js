@@ -218,94 +218,46 @@ async function fetchItems() {
   const t = document.getElementById("header-page-title");
   const oldT = t && !t.textContent.includes("Mengambil") ? t.textContent : "Beranda";
   if (t) t.textContent = "Mengambil data...";
-  
-  // Permanent Hard Wipe logic
-  const isHardWiped = localStorage.getItem("spms_hard_wiped_v2");
-  if (!isHardWiped) {
-    localStorage.removeItem("spms_items");
-    localStorage.removeItem("spms_local_new_items");
-    localStorage.removeItem("spms_status_overrides");
-    localStorage.setItem("spms_hard_wiped_v2", "true");
-    items = [];
-  }
-  
+
+  // Selalu ikut database — bersihkan cache lokal dulu
+  localStorage.removeItem("spms_items");
+  localStorage.removeItem("spms_local_new_items");
+  localStorage.removeItem("spms_status_overrides");
+  localStorage.removeItem("spms_deleted_ids_v2");
+  localStorage.removeItem("spms_hard_wiped_v2");
+  localStorage.removeItem("spms_db_cleared");
+  items = [];
+
   try {
-    const res = await fetch(SUPABASE_URL, { headers: API_HEADERS });
+    const res = await fetch(SUPABASE_URL + "?order=id.desc", { headers: API_HEADERS });
     const data = await res.json();
-    const overrides = JSON.parse(localStorage.getItem("spms_status_overrides") || "{}");
 
-    // Initialize or get deleted item IDs list
-    let deletedIds = JSON.parse(localStorage.getItem("spms_deleted_ids_v2") || "[]");
-    
-    // First time hard wipe: mark all existing rows as deleted
-    if (deletedIds.length === 0 && Array.isArray(data) && data.length > 0) {
-      deletedIds = data.map(item => parseInt(item.id) || 0);
-      localStorage.setItem("spms_deleted_ids_v2", JSON.stringify(deletedIds));
+    if (Array.isArray(data)) {
+      items = data.map(item => {
+        return {
+          id: parseInt(item.id) || 0,
+          name: item.nama_barang || "",
+          dept: item.departemen || "",
+          qty: parseInt(item.jumlah) || 0,
+          price: parseFloat(item.harga) || 0,
+          urgency: item.urgensi || "Normal",
+          ulasan: item.ulasan || "",
+          minStock: parseInt(item.min_stock) || 5,
+          tanggal: item.tanggal || "",
+          pengaju: item.pengaju || "",
+          wa: item.wa_pengaju || "",
+          signature: item.ttd_pengaju || "",
+          approval: item.persetujuan || "Pending",
+          adminSignature: item.ttd_admin || "",
+          pembelian: item.pembelian || "Belum Dibeli"
+        };
+      });
+    } else {
+      // Kalau response bukan array (error), tampil kosong
+      items = [];
     }
-
-    items = (Array.isArray(data) ? data : []).filter(item => {
-      const id = parseInt(item.id) || 0;
-      return !deletedIds.includes(id);
-    }).map(item => {
-      const id = parseInt(item.id) || 0;
-      
-      let approval = item.persetujuan || "Pending";
-      let adminSignature = item.ttd_admin || "";
-      let pembelian = item.pembelian || "Belum Dibeli";
-
-      // Apply persistent local override if available
-      if (overrides[id]) {
-        if (overrides[id].approval) approval = overrides[id].approval;
-        if (overrides[id].adminSignature !== undefined) adminSignature = overrides[id].adminSignature;
-        if (overrides[id].pembelian) pembelian = overrides[id].pembelian;
-      }
-
-      return {
-        id: id,
-        name: item.nama_barang || "",
-        dept: item.departemen || "",
-        qty: parseInt(item.jumlah) || 0,
-        price: parseFloat(item.harga) || 0,
-        urgency: item.urgensi || "Normal",
-        ulasan: item.ulasan || "",
-        minStock: parseInt(item.min_stock) || 5,
-        tanggal: item.tanggal || "",
-        pengaju: item.pengaju || "",
-        wa: item.wa_pengaju || "",
-        signature: item.ttd_pengaju || "",
-        approval: approval,
-        adminSignature: adminSignature,
-        pembelian: pembelian
-      };
-
-    });
-    localStorage.setItem("spms_items", JSON.stringify(items));
   } catch (err) {
-    console.error("Gagal mengambil data dari SheetDB", err);
-    const saved = localStorage.getItem("spms_items");
-    if (saved) items = JSON.parse(saved);
-  }
-
-  // Merge locally created items
-  const localNew = JSON.parse(localStorage.getItem("spms_local_new_items") || "[]");
-  const overrides = JSON.parse(localStorage.getItem("spms_status_overrides") || "{}");
-  const deletedIds = JSON.parse(localStorage.getItem("spms_deleted_ids_v2") || "[]");
-
-  localNew.forEach(newItem => {
-    if (deletedIds.includes(newItem.id)) return;
-    if (overrides[newItem.id]) {
-      if (overrides[newItem.id].approval) newItem.approval = overrides[newItem.id].approval;
-      if (overrides[newItem.id].adminSignature !== undefined) newItem.adminSignature = overrides[newItem.id].adminSignature;
-      if (overrides[newItem.id].pembelian) newItem.pembelian = overrides[newItem.id].pembelian;
-    }
-    if (!items.some(i => i.id === newItem.id)) {
-      items.unshift(newItem);
-    }
-  });
-
-  // Ensure default items if none found
-  const isCleared = localStorage.getItem("spms_db_cleared") === "true";
-  if (isCleared) {
+    console.error("Gagal mengambil data dari Supabase", err);
     items = [];
   }
 
@@ -829,8 +781,7 @@ if (formRegisterItem) {
     // Remove database cleared flag on new submission
     localStorage.removeItem("spms_db_cleared");
 
-    // Instantly persist and render locally
-    const localNew = JSON.parse(localStorage.getItem("spms_local_new_items") || "[]");
+    // Instant UI update sementara sebelum Supabase response
     newItems.forEach(rawItem => {
       const formattedItem = {
         id: rawItem.id,
@@ -849,15 +800,11 @@ if (formRegisterItem) {
         pembelian: "Belum Dibeli",
         tanggal: rawItem.tanggal
       };
-      localNew.unshift(formattedItem);
       if (!items.some(i => i.id === formattedItem.id)) {
         items.unshift(formattedItem);
       }
     });
 
-    localStorage.setItem("spms_local_new_items", JSON.stringify(localNew));
-    localStorage.setItem("spms_items", JSON.stringify(items));
-    
     // Instant UI update
     updateUI();
     closeModal();
@@ -869,14 +816,17 @@ if (formRegisterItem) {
       sendWaNotification(lastItem.id, "Pengajuan Baru");
     }
 
+    // Simpan ke Supabase dan refresh dari database
     try {
       await fetch(SUPABASE_URL, {
         method: "POST",
         headers: API_HEADERS,
         body: JSON.stringify(newItems)
       });
+      // Refresh data dari Supabase supaya sinkron
+      await fetchItems();
     } catch(err) {
-      console.warn("SheetDB sync info", err);
+      console.warn("Supabase sync info", err);
     } finally {
       btnSubmit.innerHTML = originalText;
       btnSubmit.disabled = false;
