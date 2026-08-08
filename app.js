@@ -3,8 +3,8 @@
 // =====================================================
 
 // ---- State ----
-const SUPABASE_URL = "https://lwbszewvopfwsoisdpzq.supabase.co/rest/v1/pengajuan";
-const SUPABASE_KEY = "sb_sec" + "ret_ynyK__dicjBHOnq6Y9G3fg_tcwk7B3e";
+const SUPABASE_URL = "https://srwnsoyiolztjijfifaq.supabase.co/rest/v1/pengajuan";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNyd25zb3lpb2x6dGppamZpZmFxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk0NDYzNTIsImV4cCI6MjA5NTAyMjM1Mn0.RPidnJYg0L2cHw3NppxASc81kqleytxVWtorSmAiFjA";
 const API_HEADERS = {
   "Content-Type": "application/json",
   "apikey": SUPABASE_KEY,
@@ -833,21 +833,21 @@ if (formRegisterItem) {
     const localNew = JSON.parse(localStorage.getItem("spms_local_new_items") || "[]");
     newItems.forEach(rawItem => {
       const formattedItem = {
-        id: parseInt(rawItem["ID"]),
-        name: rawItem["NAMA BARANG"],
-        dept: rawItem["DEPARTERMENT"],
-        qty: rawItem["JUMLAH"],
-        price: rawItem["HARGA"],
-        urgency: rawItem["URGENSI"],
-        ulasan: rawItem["ULASAN"] || "",
-        minStock: rawItem["MIN STOCK"],
-        pengaju: rawItem["PENGAJU"],
-        wa: rawItem["WA"],
-        signature: rawItem["TANDA TANGAN"],
+        id: rawItem.id,
+        name: rawItem.nama_barang,
+        dept: rawItem.departemen,
+        qty: rawItem.jumlah,
+        price: rawItem.harga,
+        urgency: rawItem.urgensi,
+        ulasan: rawItem.ulasan || "",
+        minStock: rawItem.min_stock,
+        pengaju: rawItem.pengaju,
+        wa: rawItem.wa_pengaju,
+        signature: rawItem.ttd_pengaju,
         adminSignature: "",
         approval: "Pending",
         pembelian: "Belum Dibeli",
-        tanggal: rawItem["TANGGAL"]
+        tanggal: rawItem.tanggal
       };
       localNew.unshift(formattedItem);
       if (!items.some(i => i.id === formattedItem.id)) {
@@ -866,7 +866,7 @@ if (formRegisterItem) {
     // Trigger WA notification to Manager & Direktur for new submission
     if (newItems.length > 0) {
       const lastItem = newItems[newItems.length - 1];
-      sendWaNotification(lastItem.ID, "Pengajuan Baru");
+      sendWaNotification(lastItem.id, "Pengajuan Baru");
     }
 
     try {
@@ -1929,6 +1929,12 @@ function initAiAssistant() {
 
 function escapeHtml(str) {
   return (str || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function getGeminiApiKey() {
+  try {
+    return localStorage.getItem("spms_gemini_api_key") || "";
+  } catch(e) { return ""; }
 }
 
 async function fetchGeminiAiResponse(queryText) {
