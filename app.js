@@ -303,6 +303,15 @@ async function fetchItems() {
     }
   });
 
+  // Ensure default items if none found
+  const isCleared = localStorage.getItem("spms_db_cleared") === "true";
+  if (isCleared) {
+    items = [];
+  }
+
+  if (t) t.textContent = oldT;
+  updateUI();
+}
 
 window.clearAllDatabaseData = async function() {
   if (!confirm("⚠️ Apakah Anda yakin ingin MENGHAPUS SELURUH DATA pengajuan barang di database? Data yang dihapus tidak dapat dikembalikan.")) {
@@ -325,16 +334,6 @@ window.clearAllDatabaseData = async function() {
     console.warn("SheetDB delete warning", e);
   }
 };
-
-  // Ensure default items if none found
-  const isCleared = localStorage.getItem("spms_db_cleared") === "true";
-  if (isCleared) {
-    items = [];
-  }
-
-  if (t) t.textContent = oldT;
-  updateUI();
-}
 
 // =====================================================
 // DOM References
