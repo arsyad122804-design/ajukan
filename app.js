@@ -692,9 +692,10 @@ if (btnAddMoreItem) {
     const entries = itemsContainer.querySelectorAll(".item-entry-group");
     const newEntry = entries[0].cloneNode(true);
     
-    // Clear inputs in cloned node
-    newEntry.querySelectorAll("input").forEach(input => {
-      input.value = "";
+    // Clear inputs and remove IDs to prevent HTML5 validation bugs on multiple items
+    newEntry.querySelectorAll("input, select, textarea").forEach(input => {
+      if (input.type !== "checkbox" && input.type !== "radio") input.value = "";
+      if (input.hasAttribute("id")) input.removeAttribute("id");
     });
     
     // Update title
@@ -1363,16 +1364,9 @@ function handleAdminSignatureConfirm(e) {
   }
 }
 
-// Delegated Admin Signature Form Submit & Click Handler
+// Delegated Admin Signature Form Submit Handler
 document.addEventListener("submit", (e) => {
   if (e.target && e.target.id === "form-admin-signature") {
-    handleAdminSignatureConfirm(e);
-  }
-});
-
-document.addEventListener("click", (e) => {
-  const btn = e.target.closest("#modal-admin-signature button[type='submit'], #btn-submit-admin-sig");
-  if (btn) {
     handleAdminSignatureConfirm(e);
   }
 });

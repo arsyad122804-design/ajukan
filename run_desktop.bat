@@ -1,0 +1,3 @@
+@echo off
+echo Membuka Aplikasi SPMS (Versi Desktop)...
+npx electron main.js
