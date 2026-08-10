@@ -1244,10 +1244,6 @@ function renderSubmissionTable() {
       modal.classList.add("open");
       const pengajuImg = document.getElementById("pengaju-signature-preview");
       const pengajuEmpty = document.getElementById("pengaju-signature-empty");
-      const managerImg = document.getElementById("manager-signature-preview");
-      const managerEmpty = document.getElementById("manager-signature-empty");
-      const managerGroup = document.getElementById("manager-signature-group");
-      
       const session = JSON.parse(sessionStorage.getItem("spms_user") || "{}");
       
       // Handle Pengaju Signature
@@ -1259,18 +1255,37 @@ function renderSubmissionTable() {
         if (pengajuEmpty) pengajuEmpty.style.display = "block";
       }
       
-      // Handle Manager Signature Preview (Only relevant if Direktur is signing)
-      if (session.role === "direktur") {
-        if (managerGroup) managerGroup.style.display = "block";
-        if (item && item.adminSignature && item.adminSignature.manager) {
-          if (managerImg) { managerImg.src = item.adminSignature.manager; managerImg.style.display = "inline-block"; }
-          if (managerEmpty) managerEmpty.style.display = "none";
-        } else {
-          if (managerImg) managerImg.style.display = "none";
-          if (managerEmpty) managerEmpty.style.display = "block";
+      // Handle Manager & Direktur Dynamic Slots
+      const contentManager = document.getElementById("content-manager");
+      const contentDirektur = document.getElementById("content-direktur");
+      const dynPreview = document.getElementById("dynamic-node-preview");
+      const dynCanvas = document.getElementById("dynamic-node-canvas");
+      
+      const otherImg = document.getElementById("other-signature-preview");
+      const otherEmpty = document.getElementById("other-signature-empty");
+
+      // Reset image preview state
+      if (otherImg) otherImg.style.display = "none";
+      if (otherEmpty) otherEmpty.style.display = "block";
+
+      if (session.role === "manager") {
+        if (contentManager && dynCanvas) contentManager.appendChild(dynCanvas);
+        if (contentDirektur && dynPreview) contentDirektur.appendChild(dynPreview);
+        
+        // Load Direktur's signature if they already signed
+        if (item && item.adminSignature && item.adminSignature.direktur) {
+          if (otherImg) { otherImg.src = item.adminSignature.direktur; otherImg.style.display = "inline-block"; }
+          if (otherEmpty) otherEmpty.style.display = "none";
         }
-      } else {
-        if (managerGroup) managerGroup.style.display = "none";
+      } else if (session.role === "direktur") {
+        if (contentManager && dynPreview) contentManager.appendChild(dynPreview);
+        if (contentDirektur && dynCanvas) contentDirektur.appendChild(dynCanvas);
+
+        // Load Manager's signature if they already signed
+        if (item && item.adminSignature && item.adminSignature.manager) {
+          if (otherImg) { otherImg.src = item.adminSignature.manager; otherImg.style.display = "inline-block"; }
+          if (otherEmpty) otherEmpty.style.display = "none";
+        }
       }
 
       initSignaturePad("admin-signature-canvas", "admin-signature-wrapper", "admin-sig-status", "btn-clear-admin-signature");
@@ -1418,6 +1433,7 @@ function handleAdminSignatureConfirm(e) {
   // 2. Instant modal close & toast
   const modal = document.getElementById("modal-admin-signature");
   if (modal) modal.classList.remove("open");
+  restoreAdminSignatureNodes();
   showToast(`✅ Status berhasil diperbarui menjadi ${action}!`);
 
   // Automatically trigger WhatsApp notification synchronously
@@ -1483,11 +1499,22 @@ document.addEventListener("submit", async (e) => {
 });
 
 // Modal close handlers for admin signature
+function restoreAdminSignatureNodes() {
+  const nodePreviewParent = document.getElementById("node-preview");
+  const nodeCanvasParent = document.getElementById("node-canvas");
+  const dynPreview = document.getElementById("dynamic-node-preview");
+  const dynCanvas = document.getElementById("dynamic-node-canvas");
+  if (nodePreviewParent && dynPreview) nodePreviewParent.appendChild(dynPreview);
+  if (nodeCanvasParent && dynCanvas) nodeCanvasParent.appendChild(dynCanvas);
+}
+
 document.getElementById("btn-close-admin-modal")?.addEventListener("click", () => {
   document.getElementById("modal-admin-signature")?.classList.remove("open");
+  restoreAdminSignatureNodes();
 });
 document.getElementById("btn-cancel-admin-modal")?.addEventListener("click", () => {
   document.getElementById("modal-admin-signature")?.classList.remove("open");
+  restoreAdminSignatureNodes();
 });
 
 // Filter bindings (dashboard submission table)
