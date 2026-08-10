@@ -1125,6 +1125,7 @@ function renderSubmissionTable() {
   const empty  = document.getElementById("submission-empty-state");
   const fApproval = document.getElementById("dash-filter-approval");
   const fDept     = document.getElementById("dash-filter-dept");
+  const session   = JSON.parse(sessionStorage.getItem("spms_user") || "{}");
   if (!tbody) return;
 
   const approvalF = fApproval?.value || "all";
