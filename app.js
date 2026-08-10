@@ -201,9 +201,15 @@ window.sendWaNotification = async function(id, action) {
     if (dirPhone) sendWaDirect(dirPhone, msgDir);
     else showToast("⚠️ Nomor WA Direktur belum diisi di menu Profil!");
   }
-  // STAGE 2B: Direktur Clicks Setuju (Final) -> WA sent automatically to Admin (from Admin Profile number)
-  else if (actionClean === "Disetujui" || actionClean === "Disetujui Direktur") {
-    const msgAdm = `Assalamu'alaikum wr. wb.\n\nYth. Admin,\n\nPengadaan Barang Telah Disetujui & Siap Dibeli:\n📦 *Barang:* ${item.name}\n🏛️ *Unit:* ${item.dept}\n🔢 *Jumlah:* ${item.qty} Pcs\n👤 *Pengaju:* ${item.pengaju || "Pengajuan"}\n\nStatus: *✅ DISETUJUI (Siap Dibeli)*\nSilakan lakukan proses pembelian.\n\nTerima kasih.\n_Sistem Pengadaan SPMS Hibatullah IIBS_`;
+  // STAGE 2B: Direktur Clicks Setuju -> WA sent to Manager to ask for final approval
+  else if (actionClean === "Disetujui Direktur") {
+    const msgMgr = `Assalamu'alaikum wr. wb.\n\nYth. Manager,\n\nDirektur telah menyetujui pengajuan barang:\n📦 *Barang:* ${item.name}\n🏛️ *Unit:* ${item.dept}\n🔢 *Jumlah:* ${item.qty} Pcs\n👤 *Pengaju:* ${item.pengaju || "Pengajuan"}\n\nStatus: *⏳ MENUNGGU PERSETUJUAN MANAGER*\nMohon segera login untuk memberikan tanda tangan persetujuan final.\n\nTerima kasih.\n_Sistem Pengadaan SPMS Hibatullah IIBS_`;
+    if (mgrPhone) sendWaDirect(mgrPhone, msgMgr);
+    else showToast("⚠️ Nomor WA Manager belum diisi di menu Profil!");
+  }
+  // STAGE 3: Final Approval (Both Signed) -> WA sent automatically to Admin (from Admin Profile number)
+  else if (actionClean === "Disetujui") {
+    const msgAdm = `Assalamu'alaikum wr. wb.\n\nYth. Admin,\n\nPengadaan Barang Telah Disetujui (Oleh Manager & Direktur) & Siap Dibeli:\n📦 *Barang:* ${item.name}\n🏛️ *Unit:* ${item.dept}\n🔢 *Jumlah:* ${item.qty} Pcs\n👤 *Pengaju:* ${item.pengaju || "Pengajuan"}\n\nStatus: *✅ DISETUJUI FINAL (Siap Dibeli)*\nSilakan lakukan proses pembelian.\n\nTerima kasih.\n_Sistem Pengadaan SPMS Hibatullah IIBS_`;
     if (admPhone) sendWaDirect(admPhone, msgAdm);
     else showToast("⚠️ Nomor WA Admin belum diisi di menu Profil!");
   } 
@@ -1202,19 +1208,25 @@ function renderSubmissionTable() {
       <td>
         <div class="approval-actions" style="display:flex; gap:6px; align-items:center;">
           ${(() => {
-            if (session.role === "manager" && (approval === "Pending" || !approval)) {
-              return `<button class="btn-approve" data-id="${item.id}" style="background:#10b981; color:white; border:none; padding:6px 12px; border-radius:8px; font-weight:700; font-size:12px; cursor:pointer;" title="Terima Pengajuan">✓ Terima</button>
-                      <button class="btn-reject"  data-id="${item.id}" style="background:#ef4444; color:white; border:none; padding:6px 12px; border-radius:8px; font-weight:700; font-size:12px; cursor:pointer;" title="Nolak Pengajuan">✕ Nolak</button>`;
-            } else if (session.role === "direktur" && approval === "Disetujui Manager") {
-              return `<button class="btn-approve" data-id="${item.id}" style="background:#10b981; color:white; border:none; padding:6px 12px; border-radius:8px; font-weight:700; font-size:12px; cursor:pointer;" title="Terima Pengajuan">✓ Terima</button>
-                      <button class="btn-reject"  data-id="${item.id}" style="background:#ef4444; color:white; border:none; padding:6px 12px; border-radius:8px; font-weight:700; font-size:12px; cursor:pointer;" title="Nolak Pengajuan">✕ Nolak</button>`;
-            } else if ((session.role === "manager" && approval === "Disetujui Manager") || (session.role === "direktur" && (approval === "Disetujui" || approval === "Disetujui Direktur"))) {
-              return `<button class="btn-pending" data-id="${item.id}" style="background:#f59e0b; color:white; border:none; padding:6px 12px; border-radius:8px; font-weight:700; font-size:12px; cursor:pointer;" title="Batal Persetujuan">↩ Batal</button>`;
-            } else {
-              if (approval === "Pending" || !approval) return `<span style="font-size:11px; color:#94a3b8; font-style:italic;">Menunggu Manager</span>`;
-              if (approval === "Disetujui Manager") return `<span style="font-size:11px; color:#94a3b8; font-style:italic;">Menunggu Direktur</span>`;
-              return ``;
+            const hasManagerSigned = approval === "Disetujui Manager" || approval === "Disetujui";
+            const hasDirekturSigned = approval === "Disetujui Direktur" || approval === "Disetujui";
+            
+            if (session.role === "manager") {
+              if (!hasManagerSigned) {
+                return `<button class="btn-approve" data-id="${item.id}" style="background:#10b981; color:white; border:none; padding:6px 12px; border-radius:8px; font-weight:700; font-size:12px; cursor:pointer;" title="Terima Pengajuan">✓ Terima</button>
+                        <button class="btn-reject"  data-id="${item.id}" style="background:#ef4444; color:white; border:none; padding:6px 12px; border-radius:8px; font-weight:700; font-size:12px; cursor:pointer;" title="Nolak Pengajuan">✕ Nolak</button>`;
+              } else {
+                return `<button class="btn-pending" data-id="${item.id}" style="background:#f59e0b; color:white; border:none; padding:6px 12px; border-radius:8px; font-weight:700; font-size:12px; cursor:pointer;" title="Batal Persetujuan">↩ Batal</button>`;
+              }
+            } else if (session.role === "direktur") {
+              if (!hasDirekturSigned) {
+                return `<button class="btn-approve" data-id="${item.id}" style="background:#10b981; color:white; border:none; padding:6px 12px; border-radius:8px; font-weight:700; font-size:12px; cursor:pointer;" title="Terima Pengajuan">✓ Terima</button>
+                        <button class="btn-reject"  data-id="${item.id}" style="background:#ef4444; color:white; border:none; padding:6px 12px; border-radius:8px; font-weight:700; font-size:12px; cursor:pointer;" title="Nolak Pengajuan">✕ Nolak</button>`;
+              } else {
+                return `<button class="btn-pending" data-id="${item.id}" style="background:#f59e0b; color:white; border:none; padding:6px 12px; border-radius:8px; font-weight:700; font-size:12px; cursor:pointer;" title="Batal Persetujuan">↩ Batal</button>`;
+              }
             }
+            return ``;
           })()}
           <button class="btn-edit-item" data-id="${item.id}" style="background:#0284c7; color:white; border:none; padding:6px 12px; border-radius:8px; font-weight:700; font-size:12px; cursor:pointer;" title="Edit Barang">✏️ Edit</button>
         </div>
