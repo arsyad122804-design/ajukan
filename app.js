@@ -195,8 +195,14 @@ window.sendWaNotification = async function(id, action) {
     if (dirPhone) sendWaDirect(dirPhone, msg);
     if (!mgrPhone && !dirPhone) showToast("⚠️ Nomor WA Direktur / Manager belum diisi di menu Profil!");
   } 
-  // STAGE 2: Direktur or Manager Clicks Setuju -> WA sent automatically to Admin (from Admin Profile number)
-  else if (actionClean === "Disetujui" || actionClean === "Disetujui Direktur" || actionClean === "Disetujui Manager") {
+  // STAGE 2A: Manager Clicks Setuju -> WA sent to Direktur to ask for final approval
+  else if (actionClean === "Disetujui Manager") {
+    const msgDir = `Assalamu'alaikum wr. wb.\n\nYth. Direktur,\n\nManager telah menyetujui pengajuan barang:\n📦 *Barang:* ${item.name}\n🏛️ *Unit:* ${item.dept}\n🔢 *Jumlah:* ${item.qty} Pcs\n👤 *Pengaju:* ${item.pengaju || "Pengajuan"}\n\nStatus: *⏳ MENUNGGU PERSETUJUAN DIREKTUR*\nMohon segera login untuk memberikan tanda tangan persetujuan final.\n\nTerima kasih.\n_Sistem Pengadaan SPMS Hibatullah IIBS_`;
+    if (dirPhone) sendWaDirect(dirPhone, msgDir);
+    else showToast("⚠️ Nomor WA Direktur belum diisi di menu Profil!");
+  }
+  // STAGE 2B: Direktur Clicks Setuju (Final) -> WA sent automatically to Admin (from Admin Profile number)
+  else if (actionClean === "Disetujui" || actionClean === "Disetujui Direktur") {
     const msgAdm = `Assalamu'alaikum wr. wb.\n\nYth. Admin,\n\nPengadaan Barang Telah Disetujui & Siap Dibeli:\n📦 *Barang:* ${item.name}\n🏛️ *Unit:* ${item.dept}\n🔢 *Jumlah:* ${item.qty} Pcs\n👤 *Pengaju:* ${item.pengaju || "Pengajuan"}\n\nStatus: *✅ DISETUJUI (Siap Dibeli)*\nSilakan lakukan proses pembelian.\n\nTerima kasih.\n_Sistem Pengadaan SPMS Hibatullah IIBS_`;
     if (admPhone) sendWaDirect(admPhone, msgAdm);
     else showToast("⚠️ Nomor WA Admin belum diisi di menu Profil!");
@@ -505,7 +511,7 @@ function renderAdminHistoryTable() {
   const tbody = document.getElementById("admin-history-table-body");
   const empty = document.getElementById("admin-history-empty-state");
   if (!tbody) return;
-  const filtered = items.filter(i => i.approval !== "Pending");
+  const filtered = items.filter(i => i.approval === "Disetujui" || i.approval === "Disetujui Direktur" || i.pembelian === "Sudah Dibeli");
   if (filtered.length === 0) { tbody.innerHTML = ""; if (empty) empty.style.display = "flex"; return; }
   if (empty) empty.style.display = "none";
   tbody.innerHTML = filtered.map((i, idx) => `
