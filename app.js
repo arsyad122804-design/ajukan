@@ -548,7 +548,7 @@ function renderAdminPurchasesTable() {
   const tbody = document.getElementById("admin-purchases-table-body");
   const empty = document.getElementById("admin-purchases-empty-state");
   if (!tbody) return;
-  const filtered = items.filter(i => i.approval && i.approval.startsWith("Disetujui"));
+  const filtered = items.filter(i => i.approval === "Disetujui");
   if (filtered.length === 0) { tbody.innerHTML = ""; if (empty) empty.style.display = "flex"; return; }
   if (empty) empty.style.display = "none";
   tbody.innerHTML = filtered.map((i, idx) => `
@@ -1133,9 +1133,9 @@ function renderSubmissionTable() {
   const filtered = items.filter(item => {
     const matchApproval = approvalF === "all"
       || (approvalF === "Sudah Dibeli" && item.pembelian === "Sudah Dibeli")
-      || (approvalF === "Disetujui" && item.approval && item.approval.startsWith("Disetujui"))
+      || (approvalF === "Disetujui" && item.approval === "Disetujui") // Hanya yang benar-benar final
       || (approvalF === "Ditolak" && item.approval === "Ditolak")
-      || (approvalF === "Pending" && (item.approval || "Pending") === "Pending");
+      || (approvalF === "Pending" && ((item.approval || "Pending") === "Pending" || item.approval === "Disetujui Manager" || item.approval === "Disetujui Direktur")); // Termasuk yang baru disetujui sebelah pihak
     const matchDept     = deptF === "all" || item.dept === deptF;
     return matchApproval && matchDept;
   });
