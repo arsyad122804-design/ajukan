@@ -1209,6 +1209,8 @@ function renderSubmissionTable() {
       <td>
         <div class="approval-actions" style="display:flex; gap:6px; align-items:center;">
           ${(() => {
+            if (approval === "Ditolak" || approval === "Sudah Dibeli" || item.pembelian === "Sudah Dibeli") return ``;
+
             const hasManagerSigned = approval === "Disetujui Manager" || approval === "Disetujui";
             const hasDirekturSigned = approval === "Disetujui Direktur" || approval === "Disetujui";
             
@@ -1350,17 +1352,30 @@ function renderSubmissionTable() {
     btn.addEventListener("click", async () => {
       const id = parseInt(btn.dataset.id);
       const item = items.find(i => i.id === id);
+      const session = JSON.parse(sessionStorage.getItem("spms_user") || "{}");
       if (item) {
-        item.approval = "Pending";
-        item.adminSignature = "";
-        saveLocalOverrides(id, "Pending", "", item.pembelian || "Belum Dibeli");
+        let newApproval = "Pending";
+        let newSigs = (typeof item.adminSignature === "object" && item.adminSignature !== null) ? { ...item.adminSignature } : {};
+        
+        if (session.role === "manager") {
+          delete newSigs.manager;
+          if (newSigs.direktur) newApproval = "Disetujui Direktur";
+        } else if (session.role === "direktur") {
+          delete newSigs.direktur;
+          if (newSigs.manager) newApproval = "Disetujui Manager";
+        }
+
+        item.approval = newApproval;
+        item.adminSignature = newSigs;
+        
+        saveLocalOverrides(id, newApproval, JSON.stringify(newSigs), item.pembelian || "Belum Dibeli");
         updateUI();
-        showToast(`⏳ "${item.name}" dikembalikan ke Pending.`);
+        showToast(`⏳ Status "${item.name}" dikembalikan ke ${newApproval}.`);
 
         fetch(`${SUPABASE_URL}?id=eq.${id}`, { 
           method: 'PATCH', 
           headers: API_HEADERS, 
-          body: JSON.stringify({ persetujuan: "Pending", pembelian: "Belum Dibeli" }) 
+          body: JSON.stringify({ persetujuan: newApproval, pembelian: "Belum Dibeli", ttd_admin: JSON.stringify(newSigs) }) 
         }).catch(e => console.warn("Supabase sync warning", e));
       }
     });
@@ -1408,23 +1423,26 @@ function handleAdminSignatureConfirm(e) {
   const currentPembelian = itemToApprove ? itemToApprove.pembelian : "Belum Dibeli";
   const session = JSON.parse(sessionStorage.getItem("spms_user") || "{}");
   let action = currentApprovalAction || "Disetujui";
-  if (action === "Disetujui") {
-    if (session.role === "manager") action = "Disetujui Manager";
-    else if (session.role === "direktur") action = "Disetujui";
-  }
-
-  // 1. Instant local update
   let currentSigs = {};
+  
   if (itemToApprove) {
     currentSigs = (typeof itemToApprove.adminSignature === "object" && itemToApprove.adminSignature !== null) ? { ...itemToApprove.adminSignature } : {};
+  }
+
+  if (action === "Disetujui") {
     if (session.role === "manager") {
       currentSigs.manager = adminSignatureData;
+      action = currentSigs.direktur ? "Disetujui" : "Disetujui Manager";
     } else if (session.role === "direktur") {
       currentSigs.direktur = adminSignatureData;
+      action = currentSigs.manager ? "Disetujui" : "Disetujui Direktur";
     } else {
       currentSigs.direktur = adminSignatureData; // fallback
     }
+  }
 
+  // 1. Instant local update
+  if (itemToApprove) {
     itemToApprove.approval = action;
     itemToApprove.adminSignature = currentSigs;
     saveLocalOverrides(currentApprovalId, action, JSON.stringify(currentSigs), currentPembelian);
@@ -1849,8 +1867,8 @@ window.addEventListener("DOMContentLoaded", () => {
       let newNotifs = [];
 
       if (session.role === "manager") {
-        // Manager sees Pending items from Pengajuan
-        newNotifs = items.filter(i => i.approval === "Pending").map(i => ({
+        // Manager sees Pending items from Pengajuan or if Direktur signed first
+        newNotifs = items.filter(i => i.approval === "Pending" || i.approval === "Disetujui Direktur").map(i => ({
           id: i.id,
           title: "Pengajuan Baru",
           desc: `${i.pengaju || 'Pengajuan'} mengajukan ${i.qty} Pcs ${i.name} (${i.dept})`,
