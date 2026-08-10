@@ -248,7 +248,15 @@ async function fetchItems() {
           wa: item.wa_pengaju || "",
           signature: item.ttd_pengaju || "",
           approval: item.persetujuan || "Pending",
-          adminSignature: item.ttd_admin || "",
+          adminSignature: (() => {
+            if (!item.ttd_admin) return {};
+            try {
+              return JSON.parse(item.ttd_admin);
+            } catch (e) {
+              if (item.ttd_admin.startsWith("data:")) return { direktur: item.ttd_admin };
+              return {};
+            }
+          })(),
           pembelian: item.pembelian || "Belum Dibeli"
         };
       });
@@ -548,8 +556,10 @@ function renderAdminPurchasesTable() {
       </td>
       <td>
         <div style="display:flex; gap:8px; align-items:center;">
-          ${i.signature ? `<img src="${i.signature}" style="height:30px; width:auto; background:white; border-radius:4px; border:1px solid #e2e8f0;" title="Ttd Pengaju">` : '<span style="color:#94a3b8;font-size:11px;">-</span>'}
-          ${i.adminSignature ? `<img src="${i.adminSignature}" style="height:30px; width:auto; background:white; border-radius:4px; border:1px solid #e2e8f0;" title="Ttd Direktur">` : '<span style="color:#94a3b8;font-size:11px;">-</span>'}
+          ${i.signature ? `<img src="${i.signature}" style="height:30px; width:auto; background:white; border-radius:4px; border:1px solid #e2e8f0;" title="Ttd Pengaju">` : ''}
+          ${i.adminSignature && i.adminSignature.manager ? `<img src="${i.adminSignature.manager}" style="height:30px; width:auto; background:white; border-radius:4px; border:1px solid #e2e8f0;" title="Ttd Manager">` : ''}
+          ${i.adminSignature && i.adminSignature.direktur ? `<img src="${i.adminSignature.direktur}" style="height:30px; width:auto; background:white; border-radius:4px; border:1px solid #e2e8f0;" title="Ttd Direktur">` : ''}
+          ${!i.signature && (!i.adminSignature || (!i.adminSignature.manager && !i.adminSignature.direktur)) ? '<span style="color:#94a3b8;font-size:11px;">-</span>' : ''}
         </div>
       </td>
       <td>
@@ -805,7 +815,7 @@ if (formRegisterItem) {
         pengaju: rawItem.pengaju,
         wa: rawItem.wa_pengaju,
         signature: rawItem.ttd_pengaju,
-        adminSignature: "",
+        adminSignature: {},
         approval: "Pending",
         pembelian: "Belum Dibeli",
         tanggal: rawItem.tanggal
@@ -1177,10 +1187,11 @@ function renderSubmissionTable() {
           <span class="approval-badge ${apv.cls}">
             <span>${apv.icon}</span> ${apvLabel}
           </span>
-          ${approval !== "Pending" && (item.signature || item.adminSignature) ? `
+          ${(item.signature || (item.adminSignature && (item.adminSignature.manager || item.adminSignature.direktur))) ? `
           <div style="display: flex; gap: 4px; flex-wrap: wrap; justify-content: center;">
             ${item.signature ? `<img src="${item.signature}" alt="TTD Pengaju" style="height: 35px; width: auto; background: white; border: 1px solid var(--clr-border); border-radius: 4px; padding: 2px;" title="TTD Pengaju">` : ""}
-            ${item.adminSignature ? `<img src="${item.adminSignature}" alt="TTD Admin" style="height: 35px; width: auto; background: white; border: 1px solid var(--clr-border); border-radius: 4px; padding: 2px;" title="TTD Admin">` : ""}
+            ${item.adminSignature && item.adminSignature.manager ? `<img src="${item.adminSignature.manager}" alt="TTD Manager" style="height: 35px; width: auto; background: white; border: 1px solid var(--clr-border); border-radius: 4px; padding: 2px;" title="TTD Manager">` : ""}
+            ${item.adminSignature && item.adminSignature.direktur ? `<img src="${item.adminSignature.direktur}" alt="TTD Direktur" style="height: 35px; width: auto; background: white; border: 1px solid var(--clr-border); border-radius: 4px; padding: 2px;" title="TTD Direktur">` : ""}
           </div>
           ` : ""}
         </div>
@@ -1342,10 +1353,20 @@ function handleAdminSignatureConfirm(e) {
   }
 
   // 1. Instant local update
+  let currentSigs = {};
   if (itemToApprove) {
+    currentSigs = (typeof itemToApprove.adminSignature === "object" && itemToApprove.adminSignature !== null) ? { ...itemToApprove.adminSignature } : {};
+    if (session.role === "manager") {
+      currentSigs.manager = adminSignatureData;
+    } else if (session.role === "direktur") {
+      currentSigs.direktur = adminSignatureData;
+    } else {
+      currentSigs.direktur = adminSignatureData; // fallback
+    }
+
     itemToApprove.approval = action;
-    itemToApprove.adminSignature = adminSignatureData;
-    saveLocalOverrides(currentApprovalId, action, adminSignatureData, currentPembelian);
+    itemToApprove.adminSignature = currentSigs;
+    saveLocalOverrides(currentApprovalId, action, JSON.stringify(currentSigs), currentPembelian);
     updateUI();
   }
 
@@ -1366,7 +1387,7 @@ function handleAdminSignatureConfirm(e) {
       headers: API_HEADERS, 
       body: JSON.stringify({
         persetujuan: action,
-        ttd_admin: adminSignatureData,
+        ttd_admin: JSON.stringify(currentSigs),
         pembelian: currentPembelian
       }) 
     }).catch(err => console.warn("Supabase sync warning", err));
