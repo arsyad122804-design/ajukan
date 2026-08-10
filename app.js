@@ -556,9 +556,9 @@ function renderAdminPurchasesTable() {
       </td>
       <td>
         <div style="display:flex; gap:8px; align-items:center;">
-          ${i.signature ? `<img src="${i.signature}" style="height:30px; width:auto; background:white; border-radius:4px; border:1px solid #e2e8f0;" title="Ttd Pengaju">` : ''}
-          ${i.adminSignature && i.adminSignature.manager ? `<img src="${i.adminSignature.manager}" style="height:30px; width:auto; background:white; border-radius:4px; border:1px solid #e2e8f0;" title="Ttd Manager">` : ''}
-          ${i.adminSignature && i.adminSignature.direktur ? `<img src="${i.adminSignature.direktur}" style="height:30px; width:auto; background:white; border-radius:4px; border:1px solid #e2e8f0;" title="Ttd Direktur">` : ''}
+          ${i.signature ? `<div style="text-align:center;"><div style="font-size:9px;color:#64748b;font-weight:600;margin-bottom:2px;">Pemohon</div><img src="${i.signature}" style="height:30px; width:auto; background:white; border-radius:4px; border:1px solid #e2e8f0;" title="Ttd Pengaju"></div>` : ''}
+          ${i.adminSignature && i.adminSignature.manager ? `<div style="text-align:center;"><div style="font-size:9px;color:#64748b;font-weight:600;margin-bottom:2px;">Manager</div><img src="${i.adminSignature.manager}" style="height:30px; width:auto; background:white; border-radius:4px; border:1px solid #e2e8f0;" title="Ttd Manager"></div>` : ''}
+          ${i.adminSignature && i.adminSignature.direktur ? `<div style="text-align:center;"><div style="font-size:9px;color:#64748b;font-weight:600;margin-bottom:2px;">Direktur</div><img src="${i.adminSignature.direktur}" style="height:30px; width:auto; background:white; border-radius:4px; border:1px solid #e2e8f0;" title="Ttd Direktur"></div>` : ''}
           ${!i.signature && (!i.adminSignature || (!i.adminSignature.manager && !i.adminSignature.direktur)) ? '<span style="color:#94a3b8;font-size:11px;">-</span>' : ''}
         </div>
       </td>
@@ -1188,10 +1188,10 @@ function renderSubmissionTable() {
             <span>${apv.icon}</span> ${apvLabel}
           </span>
           ${(item.signature || (item.adminSignature && (item.adminSignature.manager || item.adminSignature.direktur))) ? `
-          <div style="display: flex; gap: 4px; flex-wrap: wrap; justify-content: center;">
-            ${item.signature ? `<img src="${item.signature}" alt="TTD Pengaju" style="height: 35px; width: auto; background: white; border: 1px solid var(--clr-border); border-radius: 4px; padding: 2px;" title="TTD Pengaju">` : ""}
-            ${item.adminSignature && item.adminSignature.manager ? `<img src="${item.adminSignature.manager}" alt="TTD Manager" style="height: 35px; width: auto; background: white; border: 1px solid var(--clr-border); border-radius: 4px; padding: 2px;" title="TTD Manager">` : ""}
-            ${item.adminSignature && item.adminSignature.direktur ? `<img src="${item.adminSignature.direktur}" alt="TTD Direktur" style="height: 35px; width: auto; background: white; border: 1px solid var(--clr-border); border-radius: 4px; padding: 2px;" title="TTD Direktur">` : ""}
+          <div style="display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-top:4px;">
+            ${item.signature ? `<div style="text-align:center;"><div style="font-size:9px;color:#64748b;font-weight:600;margin-bottom:2px;">Pemohon</div><img src="${item.signature}" alt="TTD Pengaju" style="height: 35px; width: auto; background: white; border: 1px solid var(--clr-border); border-radius: 4px; padding: 2px;" title="TTD Pengaju"></div>` : ""}
+            ${item.adminSignature && item.adminSignature.manager ? `<div style="text-align:center;"><div style="font-size:9px;color:#64748b;font-weight:600;margin-bottom:2px;">Manager</div><img src="${item.adminSignature.manager}" alt="TTD Manager" style="height: 35px; width: auto; background: white; border: 1px solid var(--clr-border); border-radius: 4px; padding: 2px;" title="TTD Manager"></div>` : ""}
+            ${item.adminSignature && item.adminSignature.direktur ? `<div style="text-align:center;"><div style="font-size:9px;color:#64748b;font-weight:600;margin-bottom:2px;">Direktur</div><img src="${item.adminSignature.direktur}" alt="TTD Direktur" style="height: 35px; width: auto; background: white; border: 1px solid var(--clr-border); border-radius: 4px; padding: 2px;" title="TTD Direktur"></div>` : ""}
           </div>
           ` : ""}
         </div>
