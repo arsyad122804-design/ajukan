@@ -1232,12 +1232,33 @@ function renderSubmissionTable() {
       modal.classList.add("open");
       const pengajuImg = document.getElementById("pengaju-signature-preview");
       const pengajuEmpty = document.getElementById("pengaju-signature-empty");
+      const managerImg = document.getElementById("manager-signature-preview");
+      const managerEmpty = document.getElementById("manager-signature-empty");
+      const managerGroup = document.getElementById("manager-signature-group");
+      
+      const session = JSON.parse(sessionStorage.getItem("spms_user") || "{}");
+      
+      // Handle Pengaju Signature
       if (item && item.signature) {
         if (pengajuImg) { pengajuImg.src = item.signature; pengajuImg.style.display = "inline-block"; }
         if (pengajuEmpty) pengajuEmpty.style.display = "none";
       } else {
-        if (pengajuImg) { pengajuImg.src = ""; pengajuImg.style.display = "none"; }
-        if (pengajuEmpty) pengajuEmpty.style.display = "inline-block";
+        if (pengajuImg) pengajuImg.style.display = "none";
+        if (pengajuEmpty) pengajuEmpty.style.display = "block";
+      }
+      
+      // Handle Manager Signature Preview (Only relevant if Direktur is signing)
+      if (session.role === "direktur") {
+        if (managerGroup) managerGroup.style.display = "block";
+        if (item && item.adminSignature && item.adminSignature.manager) {
+          if (managerImg) { managerImg.src = item.adminSignature.manager; managerImg.style.display = "inline-block"; }
+          if (managerEmpty) managerEmpty.style.display = "none";
+        } else {
+          if (managerImg) managerImg.style.display = "none";
+          if (managerEmpty) managerEmpty.style.display = "block";
+        }
+      } else {
+        if (managerGroup) managerGroup.style.display = "none";
       }
 
       initSignaturePad("admin-signature-canvas", "admin-signature-wrapper", "admin-sig-status", "btn-clear-admin-signature");

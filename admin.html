@@ -607,8 +607,15 @@
               <span id="pengaju-signature-empty" style="color: var(--clr-muted); font-size: 13px;">Tidak ada tanda tangan</span>
             </div>
           </div>
+          <div class="form-group" style="margin-bottom: 14px;" id="manager-signature-group">
+            <label style="font-size:11px; font-weight:700; color:var(--clr-muted); text-transform:uppercase;">Tanda Tangan Manager</label>
+            <div style="border: 1px dashed var(--clr-border); border-radius: 8px; padding: 8px; background: #fafafa; text-align: center;">
+              <img id="manager-signature-preview" src="" alt="Tanda Tangan Manager" style="max-height: 80px; max-width: 100%; display: none;" />
+              <span id="manager-signature-empty" style="color: var(--clr-muted); font-size: 13px;">Belum ditandatangani</span>
+            </div>
+          </div>
           <div class="form-group">
-            <label style="font-size:11px; font-weight:700; color:var(--clr-muted); text-transform:uppercase;">Tanda Tangan Digital Admin</label>
+            <label style="font-size:11px; font-weight:700; color:var(--clr-muted); text-transform:uppercase;">Tanda Tangan Digital Anda</label>
             <div class="signature-pad-wrapper" id="admin-signature-wrapper">
               <canvas id="admin-signature-canvas" width="500" height="120"></canvas>
               <button type="button" class="btn-clear-signature" id="btn-clear-admin-signature" title="Hapus Tanda Tangan">
