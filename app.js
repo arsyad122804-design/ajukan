@@ -1198,7 +1198,7 @@ function renderSubmissionTable() {
       </td>
       <td>
         <div class="approval-actions" style="display:flex; gap:6px; align-items:center;">
-          ${(approval === "Pending" || !approval) ? `
+          ${(approval === "Pending" || !approval || (session.role === "direktur" && approval === "Disetujui Manager")) ? `
             <button class="btn-approve" data-id="${item.id}" style="background:#10b981; color:white; border:none; padding:6px 12px; border-radius:8px; font-weight:700; font-size:12px; cursor:pointer;" title="Terima Pengajuan">✓ Terima</button>
             <button class="btn-reject"  data-id="${item.id}" style="background:#ef4444; color:white; border:none; padding:6px 12px; border-radius:8px; font-weight:700; font-size:12px; cursor:pointer;" title="Nolak Pengajuan">✕ Nolak</button>
           ` : `
