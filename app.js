@@ -1204,12 +1204,21 @@ function renderSubmissionTable() {
       </td>
       <td>
         <div class="approval-actions" style="display:flex; gap:6px; align-items:center;">
-          ${(approval === "Pending" || !approval || (session.role === "direktur" && approval === "Disetujui Manager")) ? `
-            <button class="btn-approve" data-id="${item.id}" style="background:#10b981; color:white; border:none; padding:6px 12px; border-radius:8px; font-weight:700; font-size:12px; cursor:pointer;" title="Terima Pengajuan">✓ Terima</button>
-            <button class="btn-reject"  data-id="${item.id}" style="background:#ef4444; color:white; border:none; padding:6px 12px; border-radius:8px; font-weight:700; font-size:12px; cursor:pointer;" title="Nolak Pengajuan">✕ Nolak</button>
-          ` : `
-            <button class="btn-pending" data-id="${item.id}" style="background:#f59e0b; color:white; border:none; padding:6px 12px; border-radius:8px; font-weight:700; font-size:12px; cursor:pointer;" title="Batal Persetujuan">↩ Batal</button>
-          `}
+          ${(() => {
+            if (session.role === "manager" && (approval === "Pending" || !approval)) {
+              return `<button class="btn-approve" data-id="${item.id}" style="background:#10b981; color:white; border:none; padding:6px 12px; border-radius:8px; font-weight:700; font-size:12px; cursor:pointer;" title="Terima Pengajuan">✓ Terima</button>
+                      <button class="btn-reject"  data-id="${item.id}" style="background:#ef4444; color:white; border:none; padding:6px 12px; border-radius:8px; font-weight:700; font-size:12px; cursor:pointer;" title="Nolak Pengajuan">✕ Nolak</button>`;
+            } else if (session.role === "direktur" && approval === "Disetujui Manager") {
+              return `<button class="btn-approve" data-id="${item.id}" style="background:#10b981; color:white; border:none; padding:6px 12px; border-radius:8px; font-weight:700; font-size:12px; cursor:pointer;" title="Terima Pengajuan">✓ Terima</button>
+                      <button class="btn-reject"  data-id="${item.id}" style="background:#ef4444; color:white; border:none; padding:6px 12px; border-radius:8px; font-weight:700; font-size:12px; cursor:pointer;" title="Nolak Pengajuan">✕ Nolak</button>`;
+            } else if ((session.role === "manager" && approval === "Disetujui Manager") || (session.role === "direktur" && (approval === "Disetujui" || approval === "Disetujui Direktur"))) {
+              return `<button class="btn-pending" data-id="${item.id}" style="background:#f59e0b; color:white; border:none; padding:6px 12px; border-radius:8px; font-weight:700; font-size:12px; cursor:pointer;" title="Batal Persetujuan">↩ Batal</button>`;
+            } else {
+              if (approval === "Pending" || !approval) return `<span style="font-size:11px; color:#94a3b8; font-style:italic;">Menunggu Manager</span>`;
+              if (approval === "Disetujui Manager") return `<span style="font-size:11px; color:#94a3b8; font-style:italic;">Menunggu Direktur</span>`;
+              return ``;
+            }
+          })()}
           <button class="btn-edit-item" data-id="${item.id}" style="background:#0284c7; color:white; border:none; padding:6px 12px; border-radius:8px; font-weight:700; font-size:12px; cursor:pointer;" title="Edit Barang">✏️ Edit</button>
         </div>
       </td>
