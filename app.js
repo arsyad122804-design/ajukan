@@ -406,10 +406,14 @@ async function fetchItems() {
       // Save items to local cache
       localStorage.setItem("spms_items_cache", JSON.stringify(data));
     } else {
+      if (data && data.message) {
+        alert(`⚠️ ERROR DATABASE (Fetch): ${data.message}\n\nPastikan tabel 'pengajuan' sudah dibuat di database Supabase.`);
+      }
       loadCachedItems();
     }
   } catch (err) {
     console.error("Gagal mengambil data dari Supabase", err);
+    alert(`⚠️ ERROR KONEKSI DATABASE (Fetch): ${err.message}`);
     loadCachedItems();
   }
 
@@ -1031,15 +1035,20 @@ if (formRegisterItem) {
 
     // Simpan ke Supabase dan refresh dari database
     try {
-      await fetch(SUPABASE_URL, {
+      const res = await fetch(SUPABASE_URL, {
         method: "POST",
         headers: API_HEADERS,
         body: JSON.stringify(newItems)
       });
+      if (!res.ok) {
+        const errData = await res.json();
+        alert(`⚠️ GAGAL MENYIMPAN KE DATABASE: ${errData.message || res.statusText}\n\nPastikan kolom tabel database Supabase sesuai.`);
+      }
       // Refresh data dari Supabase supaya sinkron
       await fetchItems();
     } catch(err) {
       console.warn("Supabase sync info", err);
+      alert(`⚠️ ERROR JARINGAN DATABASE (Submit): ${err.message}`);
     } finally {
       btnSubmit.innerHTML = originalText;
       btnSubmit.disabled = false;
