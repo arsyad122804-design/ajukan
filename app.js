@@ -542,9 +542,7 @@ const tableEmptyState   = document.getElementById("table-empty-state");
 const searchBar         = document.getElementById("search-bar");
 const filterDept        = document.getElementById("filter-dept");
 const filterUrgency     = document.getElementById("filter-urgency");
-const filterYear        = document.getElementById("filter-year");
-const filterMonth       = document.getElementById("filter-month");
-const filterWeek        = document.getElementById("filter-week");
+const filterTime        = document.getElementById("filter-time");
 const btnExportPDF      = document.getElementById("btn-export-pdf");
 const btnAddReport      = document.getElementById("btn-add-report");
 
@@ -1258,6 +1256,33 @@ function showToast(msg) {
   }, 3000);
 }
 
+function matchTimeFilter(dateStr, timeVal) {
+  if (timeVal === "all") return true;
+  if (!dateStr) return false;
+  
+  const dateObj = parseDateString(dateStr);
+  if (!dateObj) return false;
+
+  const today = new Date();
+  
+  if (timeVal === "week") {
+    today.setHours(23, 59, 59, 999);
+    const diffTime = today - dateObj;
+    const diffDays = diffTime / (1000 * 60 * 60 * 24);
+    return diffDays >= 0 && diffDays <= 7;
+  }
+  
+  if (timeVal === "month") {
+    return dateObj.getMonth() === today.getMonth() && dateObj.getFullYear() === today.getFullYear();
+  }
+  
+  if (timeVal === "year") {
+    return dateObj.getFullYear() === today.getFullYear();
+  }
+  
+  return true;
+}
+
 function parseDateString(dateStr) {
   if (!dateStr) return null;
   const months = {
@@ -1282,32 +1307,13 @@ function renderTable() {
   const query   = (searchBar?.value || "").toLowerCase();
   const deptF   = filterDept?.value   || "all";
   const urgencyF = filterUrgency?.value || "all";
-  const yearF   = filterYear?.value    || "all";
-  const monthF  = filterMonth?.value   || "all";
-  const weekF   = filterWeek?.value    || "all";
+  const timeF   = filterTime?.value    || "all";
 
   const filtered = items.filter(item => {
     const matchSearch  = item.name.toLowerCase().includes(query);
     const matchDept    = deptF === "all" || item.dept === deptF;
     const matchUrgency = urgencyF === "all" || item.urgency === urgencyF;
-
-    let matchDate = true;
-    if (yearF !== "all" || monthF !== "all" || weekF !== "all") {
-      const dateObj = parseDateString(item.tanggal);
-      if (dateObj) {
-        const itemYear = dateObj.getFullYear();
-        const itemMonth = dateObj.getMonth();
-        const itemWeek = Math.ceil(dateObj.getDate() / 7);
-
-        const matchYear = yearF === "all" || String(itemYear) === yearF;
-        const matchMonth = monthF === "all" || String(itemMonth) === monthF;
-        const matchWeek = weekF === "all" || String(itemWeek) === weekF;
-
-        matchDate = matchYear && matchMonth && matchWeek;
-      } else {
-        matchDate = yearF === "all" && monthF === "all" && weekF === "all";
-      }
-    }
+    const matchDate    = matchTimeFilter(item.tanggal, timeF);
 
     return matchSearch && matchDept && matchUrgency && matchDate;
   });
@@ -1379,19 +1385,13 @@ function renderTable() {
 if (searchBar)      searchBar.addEventListener("input", renderTable);
 if (filterDept)     filterDept.addEventListener("change", renderTable);
 if (filterUrgency)  filterUrgency.addEventListener("change", renderTable);
-if (filterYear)     filterYear.addEventListener("change", renderTable);
-if (filterMonth)    filterMonth.addEventListener("change", renderTable);
-if (filterWeek)     filterWeek.addEventListener("change", renderTable);
+if (filterTime)     filterTime.addEventListener("change", renderTable);
 
 // Bindings for complaints filters
-const adminFilterYear = document.getElementById("admin-complaint-filter-year");
-const adminFilterMonth = document.getElementById("admin-complaint-filter-month");
-const adminFilterWeek = document.getElementById("admin-complaint-filter-week");
-const userFilterYear = document.getElementById("user-complaint-filter-year");
-const userFilterMonth = document.getElementById("user-complaint-filter-month");
-const userFilterWeek = document.getElementById("user-complaint-filter-week");
+const adminFilterTime = document.getElementById("admin-complaint-filter-time");
+const userFilterTime = document.getElementById("user-complaint-filter-time");
 
-[adminFilterYear, adminFilterMonth, adminFilterWeek, userFilterYear, userFilterMonth, userFilterWeek].forEach(el => {
+[adminFilterTime, userFilterTime].forEach(el => {
   if (el) el.addEventListener("change", renderComplaints);
 });
 
@@ -3037,27 +3037,8 @@ function renderComplaints() {
   const reporterName = session.name || "";
 
   // Helper to filter complaints list by date
-  const filterList = (list, yearVal, monthVal, weekVal) => {
-    return list.filter(c => {
-      let matchDate = true;
-      if (yearVal !== "all" || monthVal !== "all" || weekVal !== "all") {
-        const dateObj = parseDateString(c.tanggal);
-        if (dateObj) {
-          const itemYear = dateObj.getFullYear();
-          const itemMonth = dateObj.getMonth();
-          const itemWeek = Math.ceil(dateObj.getDate() / 7);
-
-          const matchYear = yearVal === "all" || String(itemYear) === yearVal;
-          const matchMonth = monthVal === "all" || String(itemMonth) === monthVal;
-          const matchWeek = weekVal === "all" || String(itemWeek) === weekVal;
-
-          matchDate = matchYear && matchMonth && matchWeek;
-        } else {
-          matchDate = yearVal === "all" && monthVal === "all" && weekVal === "all";
-        }
-      }
-      return matchDate;
-    });
+  const filterList = (list, timeVal) => {
+    return list.filter(c => matchTimeFilter(c.tanggal, timeVal));
   };
 
   // Render Admin View
@@ -3076,10 +3057,8 @@ function renderComplaints() {
       }
     }
 
-    const yearVal = document.getElementById("admin-complaint-filter-year")?.value || "all";
-    const monthVal = document.getElementById("admin-complaint-filter-month")?.value || "all";
-    const weekVal = document.getElementById("admin-complaint-filter-week")?.value || "all";
-    const filteredComplaints = filterList(complaints, yearVal, monthVal, weekVal);
+    const timeVal = document.getElementById("admin-complaint-filter-time")?.value || "all";
+    const filteredComplaints = filterList(complaints, timeVal);
 
     if (filteredComplaints.length === 0) {
       if (emptyState) emptyState.style.display = "block";
@@ -3202,10 +3181,8 @@ function renderComplaints() {
     const emptyStateUserAll = document.getElementById("user-all-complaints-empty-state");
     tbodyUserAll.innerHTML = "";
 
-    const yearVal = document.getElementById("user-complaint-filter-year")?.value || "all";
-    const monthVal = document.getElementById("user-complaint-filter-month")?.value || "all";
-    const weekVal = document.getElementById("user-complaint-filter-week")?.value || "all";
-    const filteredComplaints = filterList(complaints, yearVal, monthVal, weekVal);
+    const timeVal = document.getElementById("user-complaint-filter-time")?.value || "all";
+    const filteredComplaints = filterList(complaints, timeVal);
 
     if (filteredComplaints.length === 0) {
       if (emptyStateUserAll) emptyStateUserAll.style.display = "block";
