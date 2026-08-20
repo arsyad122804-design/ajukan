@@ -25,8 +25,11 @@ const server = http.createServer((req, res) => {
 
   let filePath = path.join(PUBLIC_DIR, reqPath);
 
+  console.log(`[Request] ${req.method} ${req.url}`);
+
   // Security check to prevent directory traversal
   if (!filePath.startsWith(PUBLIC_DIR)) {
+    console.log(`[403] Access Denied: ${filePath}`);
     res.statusCode = 403;
     res.end('Access denied');
     return;
@@ -34,6 +37,7 @@ const server = http.createServer((req, res) => {
 
   fs.stat(filePath, (err, stats) => {
     if (err || !stats.isFile()) {
+      console.log(`[404] Not Found: ${filePath}`);
       // Fallback for download requests
       if (reqPath.includes('Aplikasi-SPMS.exe')) {
         filePath = path.join(PUBLIC_DIR, 'app-dist', 'Aplikasi-SPMS.exe');
