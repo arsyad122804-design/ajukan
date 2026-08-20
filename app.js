@@ -46,6 +46,83 @@ function saveLocalOverrides(id, approval, adminSignature, pembelian) {
 
 const FONNTE_TOKEN = "Gp6kkhv5BtzLh49iw45o";
 
+// ---- EmailJS Configuration (Metode 1) ----
+const EMAILJS_SERVICE_ID = "service_pj21c0q";
+const EMAILJS_TEMPLATE_ID = "template_hjktqkq";
+const EMAILJS_PUBLIC_KEY = "ClnhHaoRzugLo_XSi";
+
+function getRoleEmail(targetRole) {
+  try {
+    const roleClean = (targetRole || "").toLowerCase().replace(/[^a-z0-9]/g, "_");
+    if (!roleClean) return "";
+    
+    // Exact profile keys to try
+    const keysToTry = [
+      "spms_profile_" + roleClean,
+      "spms_profile_" + (roleClean === "direktur" ? "hibatullah" : roleClean === "manager" ? "manager" : roleClean === "admin" ? "admin" : roleClean)
+    ];
+
+    for (const key of keysToTry) {
+      const data = JSON.parse(localStorage.getItem(key) || "{}");
+      if (data && data.email) return data.email;
+    }
+  } catch (e) {}
+  
+  // Fallback default emails if not configured in profile yet
+  if (targetRole === "admin") return "admin@example.com";
+  if (targetRole === "direktur") return "direktur@example.com";
+  if (targetRole === "manager") return "manager@example.com";
+  return "";
+}
+
+async function sendEmailDirect(toEmail, subject, message, extraParams = {}) {
+  if (!toEmail) {
+    console.warn("Target email not provided for notification.");
+    return false;
+  }
+  
+  if (EMAILJS_SERVICE_ID === "YOUR_SERVICE_ID" || EMAILJS_TEMPLATE_ID === "YOUR_TEMPLATE_ID" || EMAILJS_PUBLIC_KEY === "YOUR_PUBLIC_KEY") {
+    console.warn("EmailJS is not configured. Notification email not sent.");
+    return false;
+  }
+
+  showToast(`📧 Mengirim email ke ${toEmail}...`);
+
+  try {
+    const res = await fetch("https://api.emailjs.com/api/v1.0/email/send", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        service_id: EMAILJS_SERVICE_ID,
+        template_id: EMAILJS_TEMPLATE_ID,
+        user_id: EMAILJS_PUBLIC_KEY,
+        template_params: {
+          to_email: toEmail,
+          subject: subject,
+          message: message.replace(/\n/g, "<br>"), // Replace newlines with HTML line breaks if email is HTML
+          ...extraParams
+        }
+      })
+    });
+
+    if (res.ok) {
+      showToast(`✅ Email notifikasi terkirim ke ${toEmail}!`);
+      return true;
+    } else {
+      const errText = await res.text();
+      console.warn("EmailJS API response error:", errText);
+      showToast(`❌ Gagal mengirim email ke ${toEmail}`);
+      return false;
+    }
+  } catch (err) {
+    console.warn("EmailJS network error:", err);
+    showToast(`❌ Koneksi email bermasalah`);
+    return false;
+  }
+}
+
 function getRoleWaNumber(targetRole) {
   try {
     const roleClean = (targetRole || "").toLowerCase().replace(/[^a-z0-9]/g, "_");
@@ -173,56 +250,108 @@ async function sendWaDirect(phoneRaw, message) {
     return false;
   }
 }
-
 window.sendWaNotification = async function(id, action) {
   const item = items.find(i => i.id == id);
   if (!item) return;
 
-  // 1. WhatsApp numbers for Manager, Direktur & Admin come strictly from their profiles!
+  // Extract phone and email from the contact field
+  const rawContact = (item.wa || "").trim();
+  let itemWaNumber = "";
+  let itemEmailAddress = "";
+  if (rawContact.includes("|")) {
+    const parts = rawContact.split("|");
+    itemWaNumber = parts[0].trim();
+    itemEmailAddress = parts[1].trim();
+  } else if (rawContact.includes("@")) {
+    itemEmailAddress = rawContact;
+    itemWaNumber = "";
+  } else {
+    itemWaNumber = rawContact;
+    // Fallback: check if session user email is available
+    const session = JSON.parse(sessionStorage.getItem("spms_user") || "{}");
+    if (session.username && session.username.includes("@")) {
+      itemEmailAddress = session.username;
+    }
+  }
+  
+  if (!itemWaNumber || itemWaNumber === "—") {
+    // If it's not a valid number (e.g. empty or has @), don't resolve wa display
+    if (itemWaNumber && !itemWaNumber.includes("@")) {
+      itemWaNumber = resolveWaDisplay(item);
+    } else {
+      itemWaNumber = "";
+    }
+  }
+
+  // 1. WhatsApp & Email configurations for Manager, Direktur & Admin
   const mgrPhone = getRoleWaNumber("manager");
   const dirPhone = getRoleWaNumber("direktur");
   const admPhone = getRoleWaNumber("admin");
 
-  // 2. WhatsApp number for Pengajuan comes strictly from the WA number written in that item submission row (item.wa)!
-  const itemWaNumber = item.wa && item.wa.trim() ? item.wa.trim() : resolveWaDisplay(item);
+  const mgrEmail = getRoleEmail("manager");
+  const dirEmail = getRoleEmail("direktur");
+  const admEmail = getRoleEmail("admin");
 
   const actionClean = (action || item.approval || "Pending").trim();
 
-  // STAGE 1: Pengajuan Submits Item -> WA sent automatically to Direktur & Manager (from Profile numbers)
+  // STAGE 1: Pengajuan Submits Item -> WA/Email sent automatically to Direktur & Manager
   if (actionClean === "Pengajuan Baru") {
-    const msg = `Assalamu'alaikum wr. wb.\n\nYth. Direktur & Manager,\n\nAda Pengajuan Barang Baru dari Pengajuan:\n📦 *Barang:* ${item.name}\n🏛️ *Unit:* ${item.dept}\n🔢 *Jumlah:* ${item.qty} Pcs\n👤 *Pengaju:* ${item.pengaju || "Pengajuan"}\n\nStatus: *⏳ MENUNGGU PERSETUJUAN*\n\nTerima kasih.\n_Sistem Pengadaan SPMS Hibatullah IIBS_`;
+    const msg = `Assalamu’alaikum Ustadz, terdapat informasi terbaru terkait kegiatan dan administrasi yang perlu diperiksa. Mohon berkenan untuk mengeceknya melalui sistem.\n\n📦 *Barang:* ${item.name}\n🏛️ *Unit:* ${item.dept}\n🔢 *Jumlah:* ${item.qty} Pcs\n👤 *Pengaju:* ${item.pengaju || "Pengajuan"}\n\nJazakumullahu khairan atas perhatian dan waktunya. 🙏`;
     if (mgrPhone) sendWaDirect(mgrPhone, msg);
     if (dirPhone) sendWaDirect(dirPhone, msg);
-    if (!mgrPhone && !dirPhone) showToast("⚠️ Nomor WA Direktur / Manager belum diisi di menu Profil!");
+    
+    const extraParams = {
+      item_name: item.name,
+      item_dept: item.dept,
+      item_qty: item.qty,
+      item_pengaju: item.pengaju || "Pengajuan"
+    };
+    if (mgrEmail) sendEmailDirect(mgrEmail, "Pengajuan Barang Baru", msg, extraParams);
+    if (dirEmail) sendEmailDirect(dirEmail, "Pengajuan Barang Baru", msg, extraParams);
   } 
-  // STAGE 2A: Manager Clicks Setuju -> WA sent to Direktur to ask for final approval
+  // STAGE 2A: Manager Clicks Setuju -> WA/Email sent to Direktur
   else if (actionClean === "Disetujui Manager") {
     const msgDir = `Assalamu'alaikum wr. wb.\n\nYth. Direktur,\n\nManager telah menyetujui pengajuan barang:\n📦 *Barang:* ${item.name}\n🏛️ *Unit:* ${item.dept}\n🔢 *Jumlah:* ${item.qty} Pcs\n👤 *Pengaju:* ${item.pengaju || "Pengajuan"}\n\nStatus: *⏳ MENUNGGU PERSETUJUAN DIREKTUR*\nMohon segera login untuk memberikan tanda tangan persetujuan final.\n\nTerima kasih.\n_Sistem Pengadaan SPMS Hibatullah IIBS_`;
     if (dirPhone) sendWaDirect(dirPhone, msgDir);
-    else showToast("⚠️ Nomor WA Direktur belum diisi di menu Profil!");
+    if (dirEmail) sendEmailDirect(dirEmail, "Menunggu Persetujuan Direktur", msgDir);
+    
+    // Also notify Pengaju that Manager approved
+    const msgInv = `Assalamu'alaikum wr. wb.\n\nYth. ${item.pengaju || "Pengajuan"},\n\nPengajuan barang Anda:\n📦 *Barang:* ${item.name}\n\nStatus Terbaru: *Approved by Manager (⏳ Menunggu Direktur)*\n\nTerima kasih.\n_Sistem Pengadaan SPMS Hibatullah IIBS_`;
+    if (itemWaNumber && itemWaNumber !== "—") sendWaDirect(itemWaNumber, msgInv);
+    if (itemEmailAddress) sendEmailDirect(itemEmailAddress, "Update Pengajuan Barang", msgInv);
   }
-  // STAGE 2B: Direktur Clicks Setuju -> WA sent to Manager to ask for final approval
+  // STAGE 2B: Direktur Clicks Setuju -> WA/Email sent to Manager
   else if (actionClean === "Disetujui Direktur") {
     const msgMgr = `Assalamu'alaikum wr. wb.\n\nYth. Manager,\n\nDirektur telah menyetujui pengajuan barang:\n📦 *Barang:* ${item.name}\n🏛️ *Unit:* ${item.dept}\n🔢 *Jumlah:* ${item.qty} Pcs\n👤 *Pengaju:* ${item.pengaju || "Pengajuan"}\n\nStatus: *⏳ MENUNGGU PERSETUJUAN MANAGER*\nMohon segera login untuk memberikan tanda tangan persetujuan final.\n\nTerima kasih.\n_Sistem Pengadaan SPMS Hibatullah IIBS_`;
     if (mgrPhone) sendWaDirect(mgrPhone, msgMgr);
-    else showToast("⚠️ Nomor WA Manager belum diisi di menu Profil!");
+    if (mgrEmail) sendEmailDirect(mgrEmail, "Menunggu Persetujuan Manager", msgMgr);
+    
+    // Also notify Pengaju that Direktur approved
+    const msgInv = `Assalamu'alaikum wr. wb.\n\nYth. ${item.pengaju || "Pengajuan"},\n\nPengajuan barang Anda:\n📦 *Barang:* ${item.name}\n\nStatus Terbaru: *Approved by Direktur (⏳ Menunggu Manager)*\n\nTerima kasih.\n_Sistem Pengadaan SPMS Hibatullah IIBS_`;
+    if (itemWaNumber && itemWaNumber !== "—") sendWaDirect(itemWaNumber, msgInv);
+    if (itemEmailAddress) sendEmailDirect(itemEmailAddress, "Update Pengajuan Barang", msgInv);
   }
-  // STAGE 3: Final Approval (Both Signed) -> WA sent automatically to Admin (from Admin Profile number)
+  // STAGE 3: Final Approval -> WA/Email sent to Admin & Pengaju
   else if (actionClean === "Disetujui") {
     const msgAdm = `Assalamu'alaikum wr. wb.\n\nYth. Admin,\n\nPengadaan Barang Telah Disetujui (Oleh Manager & Direktur) & Siap Dibeli:\n📦 *Barang:* ${item.name}\n🏛️ *Unit:* ${item.dept}\n🔢 *Jumlah:* ${item.qty} Pcs\n👤 *Pengaju:* ${item.pengaju || "Pengajuan"}\n\nStatus: *✅ DISETUJUI FINAL (Siap Dibeli)*\nSilakan lakukan proses pembelian.\n\nTerima kasih.\n_Sistem Pengadaan SPMS Hibatullah IIBS_`;
     if (admPhone) sendWaDirect(admPhone, msgAdm);
-    else showToast("⚠️ Nomor WA Admin belum diisi di menu Profil!");
+    if (admEmail) sendEmailDirect(admEmail, "Pengadaan Barang Disetujui Final", msgAdm);
+    
+    const msgInv = `Assalamu'alaikum wr. wb.\n\nYth. ${item.pengaju || "Pengajuan"},\n\nPengajuan barang Anda:\n📦 *Barang:* ${item.name}\n\nStatus Terbaru: *✅ DISETUJUI FINAL (Siap Dibeli)*\n\nTerima kasih.\n_Sistem Pengadaan SPMS Hibatullah IIBS_`;
+    if (itemWaNumber && itemWaNumber !== "—") sendWaDirect(itemWaNumber, msgInv);
+    if (itemEmailAddress) sendEmailDirect(itemEmailAddress, "Pengajuan Barang Disetujui Final", msgInv);
   } 
-  // STAGE 3: Item Rejected -> WA sent to Pengajuan (from item submission WA number)
+  // STAGE 3: Item Rejected -> WA/Email sent to Pengaju
   else if (actionClean === "Ditolak") {
     const msgInv = `Assalamu'alaikum wr. wb.\n\nYth. ${item.pengaju || "Pengajuan"},\n\nPengajuan barang Anda:\n📦 *Barang:* ${item.name}\n\nStatus Terbaru: *❌ DITOLAK MANAJEMEN*\n\nTerima kasih.\n_Sistem Pengadaan SPMS Hibatullah IIBS_`;
     if (itemWaNumber && itemWaNumber !== "—") sendWaDirect(itemWaNumber, msgInv);
+    if (itemEmailAddress) sendEmailDirect(itemEmailAddress, "Pengajuan Barang Ditolak", msgInv);
   } 
-  // STAGE 4: Admin Clicks Buy in Aksi -> WA sent automatically to Pengajuan (using the WA number in that submission row!)
+  // STAGE 4: Admin Buys Item -> WA/Email sent to Pengaju
   else if (actionClean.includes("DIBELI") || item.pembelian === "Sudah Dibeli") {
     const msgInv = `Assalamu'alaikum wr. wb.\n\nYth. ${item.pengaju || "Pengajuan"},\n\nPengajuan barang Anda:\n📦 *Barang:* ${item.name}\n🔢 *Jumlah:* ${item.qty} Pcs\n\nStatus Terbaru: *🛒 SUDAH DIBELI ADMIN 🎉*\nBarang telah selesai dibelikan dan siap digunakan.\n\nTerima kasih.\n_Sistem Pengadaan SPMS Hibatullah IIBS_`;
     if (itemWaNumber && itemWaNumber !== "—") sendWaDirect(itemWaNumber, msgInv);
-    else showToast("⚠️ Nomor WA pengaju tidak diisi pada kolom pengajuan!");
+    if (itemEmailAddress) sendEmailDirect(itemEmailAddress, "Pengajuan Barang Selesai Dibeli", msgInv);
   }
 };
 
@@ -637,8 +766,14 @@ function openModal(department = "Kepesantrenan") {
     const prof = getSavedProfile();
     const inputPengaju = document.getElementById("item-pengaju");
     const inputWa = document.getElementById("item-wa");
+    const inputEmail = document.getElementById("item-email");
+    const sessionUser = JSON.parse(sessionStorage.getItem("spms_user") || "{}");
+
     if (prof.fullname && inputPengaju) inputPengaju.value = prof.fullname;
-    if (inputWa) inputWa.value = "";
+    if (inputWa) inputWa.value = cleanWaInputValue(prof.wa || "");
+    
+    let defaultEmail = prof.email || (sessionUser.username && sessionUser.username.includes("@") ? sessionUser.username : "");
+    if (inputEmail) inputEmail.value = defaultEmail;
 
     if (prof.signature) {
       const activeCanvas = document.getElementById("signature-canvas");
@@ -769,7 +904,8 @@ if (formRegisterItem) {
 
     const today = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
     const pengajuName = document.getElementById("item-pengaju").value.trim();
-    const waNumber    = document.getElementById("item-wa") ? formatWaInput(document.getElementById("item-wa").value.trim()) : "";
+    const emailInput  = document.getElementById("item-email") ? document.getElementById("item-email").value.trim() : "";
+    const contactInfo = emailInput;
     const signatureData = canvas ? canvas.toDataURL() : "";
     
     const entries = document.querySelectorAll(".item-entry-group");
@@ -799,7 +935,7 @@ if (formRegisterItem) {
           min_stock: minStock,
           tanggal: today,
           pengaju: pengajuName,
-          wa_pengaju: waNumber,
+          wa_pengaju: contactInfo,
           ttd_pengaju: signatureData,
           persetujuan: "Pending",
           ttd_admin: "",
@@ -1642,6 +1778,7 @@ function initProfileView() {
 
   const inputFullname = document.getElementById("profile-fullname");
   const inputWa       = document.getElementById("profile-wa");
+  const inputEmail    = document.getElementById("profile-email");
   const canvasProfile = document.getElementById("profile-signature-canvas");
   const wrapperProfile = document.getElementById("profile-signature-wrapper");
   const statusProfile = document.getElementById("profile-sig-status");
@@ -1658,6 +1795,9 @@ function initProfileView() {
 
     if (inputFullname) inputFullname.value = defaultName;
     if (inputWa)       inputWa.value       = cleanWaInputValue(saved.wa || "");
+    
+    let defaultEmail = saved.email || (sessionUser.username && sessionUser.username.includes("@") ? sessionUser.username : "");
+    if (inputEmail)    inputEmail.value    = defaultEmail;
 
     if (saved.signature) {
       const img = new Image();
@@ -1689,6 +1829,8 @@ function initProfileView() {
     const fullname = inputFullname ? inputFullname.value.trim() : "";
     const rawWa    = inputWa ? inputWa.value.trim() : "";
     const wa       = rawWa ? formatWaInput(rawWa) : "";
+    const email    = inputEmail ? inputEmail.value.trim() : "";
+    
     if (!fullname) {
       showToast("⚠️ Harap masukkan nama lengkap Anda!");
       return;
@@ -1700,6 +1842,7 @@ function initProfileView() {
     const profileData = {
       fullname: fullname,
       wa: wa,
+      email: email,
       signature: signatureData
     };
 
