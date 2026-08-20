@@ -560,9 +560,9 @@ const PAGE_TITLES = {
   home: "Beranda",
   dashboard: "Dashboard",
   approval: "Persetujuan",
-  reports: "Laporan",
+  reports: "Laporan Pengadaan",
   profile: "Profil Saya",
-  "send-report": "Kirim Laporan / Pengaduan",
+  "send-report": "Laporan Pengaduan",
   "admin-history": "Riwayat Persetujuan",
   "admin-purchases": "Status Pembelian"
 };
@@ -1987,13 +1987,13 @@ window.addEventListener("DOMContentLoaded", () => {
       // Set body class for CSS role-based rules
       document.body.classList.add(`role-${session.role}`);
 
-      // Admin specific restrictions: Only show Admin History and Admin Purchases
+      // Admin specific restrictions: Only show Admin History, Admin Purchases, Reports & Profile
       if (session.role === 'admin') {
-        ['nav-dashboard', 'nav-approval', 'nav-reports'].forEach(id => {
+        ['nav-dashboard', 'nav-approval'].forEach(id => {
           const el = document.getElementById(id);
           if (el) el.style.display = 'none';
         });
-        ['dashboard', 'approval', 'reports'].forEach(tab => {
+        ['dashboard', 'approval'].forEach(tab => {
           const el = document.querySelector(`.bottom-nav .nav-item[data-tab="${tab}"]`);
           if (el) el.style.display = 'none';
         });
