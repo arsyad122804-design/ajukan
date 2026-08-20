@@ -1383,6 +1383,18 @@ if (filterYear)     filterYear.addEventListener("change", renderTable);
 if (filterMonth)    filterMonth.addEventListener("change", renderTable);
 if (filterWeek)     filterWeek.addEventListener("change", renderTable);
 
+// Bindings for complaints filters
+const adminFilterYear = document.getElementById("admin-complaint-filter-year");
+const adminFilterMonth = document.getElementById("admin-complaint-filter-month");
+const adminFilterWeek = document.getElementById("admin-complaint-filter-week");
+const userFilterYear = document.getElementById("user-complaint-filter-year");
+const userFilterMonth = document.getElementById("user-complaint-filter-month");
+const userFilterWeek = document.getElementById("user-complaint-filter-week");
+
+[adminFilterYear, adminFilterMonth, adminFilterWeek, userFilterYear, userFilterMonth, userFilterWeek].forEach(el => {
+  if (el) el.addEventListener("change", renderComplaints);
+});
+
 // =====================================================
 // SUBMISSION TABLE (Dashboard)
 // =====================================================
@@ -3024,6 +3036,30 @@ function renderComplaints() {
   const session = JSON.parse(sessionStorage.getItem("spms_user") || "{}");
   const reporterName = session.name || "";
 
+  // Helper to filter complaints list by date
+  const filterList = (list, yearVal, monthVal, weekVal) => {
+    return list.filter(c => {
+      let matchDate = true;
+      if (yearVal !== "all" || monthVal !== "all" || weekVal !== "all") {
+        const dateObj = parseDateString(c.tanggal);
+        if (dateObj) {
+          const itemYear = dateObj.getFullYear();
+          const itemMonth = dateObj.getMonth();
+          const itemWeek = Math.ceil(dateObj.getDate() / 7);
+
+          const matchYear = yearVal === "all" || String(itemYear) === yearVal;
+          const matchMonth = monthVal === "all" || String(itemMonth) === monthVal;
+          const matchWeek = weekVal === "all" || String(itemWeek) === weekVal;
+
+          matchDate = matchYear && matchMonth && matchWeek;
+        } else {
+          matchDate = yearVal === "all" && monthVal === "all" && weekVal === "all";
+        }
+      }
+      return matchDate;
+    });
+  };
+
   // Render Admin View
   if (tbodyAdmin) {
     const emptyState = document.getElementById("complaint-empty-state");
@@ -3040,7 +3076,12 @@ function renderComplaints() {
       }
     }
 
-    if (complaints.length === 0) {
+    const yearVal = document.getElementById("admin-complaint-filter-year")?.value || "all";
+    const monthVal = document.getElementById("admin-complaint-filter-month")?.value || "all";
+    const weekVal = document.getElementById("admin-complaint-filter-week")?.value || "all";
+    const filteredComplaints = filterList(complaints, yearVal, monthVal, weekVal);
+
+    if (filteredComplaints.length === 0) {
       if (emptyState) emptyState.style.display = "block";
       document.getElementById("complaint-count-new").textContent = "0";
       document.getElementById("complaint-count-waiting").textContent = "0";
@@ -3049,21 +3090,21 @@ function renderComplaints() {
     } else {
       if (emptyState) emptyState.style.display = "none";
 
-      const countNew = complaints.filter(c => c.status === "Baru").length;
-      const countWaiting = complaints.filter(c => c.status === "Menunggu").length;
-      const countProcess = complaints.filter(c => c.status === "Diperbaiki").length;
-      const countDone = complaints.filter(c => c.status === "Selesai").length;
+      const countNew = filteredComplaints.filter(c => c.status === "Baru").length;
+      const countWaiting = filteredComplaints.filter(c => c.status === "Menunggu").length;
+      const countProcess = filteredComplaints.filter(c => c.status === "Diperbaiki").length;
+      const countDone = filteredComplaints.filter(c => c.status === "Selesai").length;
 
       document.getElementById("complaint-count-new").textContent = countNew;
       document.getElementById("complaint-count-waiting").textContent = countWaiting;
       document.getElementById("complaint-count-process").textContent = countProcess;
       document.getElementById("complaint-count-done").textContent = countDone;
 
-      const catElektronik = complaints.filter(c => c.kategori === "Elektronik").length;
-      const catKelas = complaints.filter(c => c.kategori === "Peralatan Kelas").length;
-      const catUmum = complaints.filter(c => c.kategori === "Fasilitas Umum").length;
-      const catLain = complaints.filter(c => c.kategori === "Lainnya").length;
-      const totalCat = complaints.length || 1;
+      const catElektronik = filteredComplaints.filter(c => c.kategori === "Elektronik").length;
+      const catKelas = filteredComplaints.filter(c => c.kategori === "Peralatan Kelas").length;
+      const catUmum = filteredComplaints.filter(c => c.kategori === "Fasilitas Umum").length;
+      const catLain = filteredComplaints.filter(c => c.kategori === "Lainnya").length;
+      const totalCat = filteredComplaints.length || 1;
 
       document.getElementById("cat-count-elektronik").textContent = catElektronik;
       document.getElementById("cat-count-kelas").textContent = catKelas;
@@ -3075,7 +3116,7 @@ function renderComplaints() {
       document.getElementById("cat-bar-umum").style.width = `${(catUmum / totalCat) * 100}%`;
       document.getElementById("cat-bar-lain").style.width = `${(catLain / totalCat) * 100}%`;
 
-      complaints.forEach((c, idx) => {
+      filteredComplaints.forEach((c, idx) => {
         const tr = document.createElement("tr");
         
         let statusHtml = "";
@@ -3120,7 +3161,7 @@ function renderComplaints() {
     }
   }
 
-  // Render User View (My Complaints History)
+  // Render User View (My Complaints History - unfiltered, always displays user's full history)
   if (tbodyUser) {
     const emptyStateUser = document.getElementById("user-complaint-empty-state");
     tbodyUser.innerHTML = "";
@@ -3161,7 +3202,12 @@ function renderComplaints() {
     const emptyStateUserAll = document.getElementById("user-all-complaints-empty-state");
     tbodyUserAll.innerHTML = "";
 
-    if (complaints.length === 0) {
+    const yearVal = document.getElementById("user-complaint-filter-year")?.value || "all";
+    const monthVal = document.getElementById("user-complaint-filter-month")?.value || "all";
+    const weekVal = document.getElementById("user-complaint-filter-week")?.value || "all";
+    const filteredComplaints = filterList(complaints, yearVal, monthVal, weekVal);
+
+    if (filteredComplaints.length === 0) {
       if (emptyStateUserAll) emptyStateUserAll.style.display = "block";
       document.getElementById("user-status-count-new").textContent = "0";
       document.getElementById("user-status-count-waiting").textContent = "0";
@@ -3170,21 +3216,21 @@ function renderComplaints() {
     } else {
       if (emptyStateUserAll) emptyStateUserAll.style.display = "none";
 
-      const countNew = complaints.filter(c => c.status === "Baru").length;
-      const countWaiting = complaints.filter(c => c.status === "Menunggu").length;
-      const countProcess = complaints.filter(c => c.status === "Diperbaiki").length;
-      const countDone = complaints.filter(c => c.status === "Selesai").length;
+      const countNew = filteredComplaints.filter(c => c.status === "Baru").length;
+      const countWaiting = filteredComplaints.filter(c => c.status === "Menunggu").length;
+      const countProcess = filteredComplaints.filter(c => c.status === "Diperbaiki").length;
+      const countDone = filteredComplaints.filter(c => c.status === "Selesai").length;
 
       document.getElementById("user-status-count-new").textContent = countNew;
       document.getElementById("user-status-count-waiting").textContent = countWaiting;
       document.getElementById("user-status-count-process").textContent = countProcess;
       document.getElementById("user-status-count-done").textContent = countDone;
 
-      const catElektronik = complaints.filter(c => c.kategori === "Elektronik").length;
-      const catKelas = complaints.filter(c => c.kategori === "Peralatan Kelas").length;
-      const catUmum = complaints.filter(c => c.kategori === "Fasilitas Umum").length;
-      const catLain = complaints.filter(c => c.kategori === "Lainnya").length;
-      const totalCat = complaints.length || 1;
+      const catElektronik = filteredComplaints.filter(c => c.kategori === "Elektronik").length;
+      const catKelas = filteredComplaints.filter(c => c.kategori === "Peralatan Kelas").length;
+      const catUmum = filteredComplaints.filter(c => c.kategori === "Fasilitas Umum").length;
+      const catLain = filteredComplaints.filter(c => c.kategori === "Lainnya").length;
+      const totalCat = filteredComplaints.length || 1;
 
       document.getElementById("user-cat-count-elektronik").textContent = catElektronik;
       document.getElementById("user-cat-count-kelas").textContent = catKelas;
@@ -3203,7 +3249,7 @@ function renderComplaints() {
         "Selesai": "background: #f0fdf4; color: #22c55e; border: 1px solid #dcfce7; padding: 4px 10px; border-radius: 6px; font-weight: 700; font-size: 11px; display: inline-block;"
       };
 
-      complaints.forEach((c, idx) => {
+      filteredComplaints.forEach((c, idx) => {
         const tr = document.createElement("tr");
         const badgeStyle = badgeStyles[c.status] || badgeStyles["Baru"];
 
@@ -3220,7 +3266,6 @@ function renderComplaints() {
         `;
         tbodyUserAll.appendChild(tr);
       });
-    }
   }
 }
 

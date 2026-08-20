@@ -539,7 +539,39 @@
             <!-- Left Side: Table -->
             <div style="background: var(--clr-card); border: 1px solid var(--clr-border); border-radius: 12px; padding: 20px;">
               <h3 style="font-size: 16px; font-weight: 700; color: var(--clr-text); margin-bottom: 16px;">Daftar Pengaduan</h3>
-              
+              <div class="filters-row" style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px;">
+                <select id="admin-complaint-filter-year" class="filter-select" style="padding: 6px 10px; border-radius: 6px; border: 1px solid var(--clr-border); font-size: 12.5px; font-weight: 600; background: var(--clr-card); color: var(--clr-text); outline: none;">
+                  <option value="all">Semua Tahun</option>
+                  <option value="2025">2025</option>
+                  <option value="2026">2026</option>
+                  <option value="2027">2027</option>
+                  <option value="2028">2028</option>
+                </select>
+                <select id="admin-complaint-filter-month" class="filter-select" style="padding: 6px 10px; border-radius: 6px; border: 1px solid var(--clr-border); font-size: 12.5px; font-weight: 600; background: var(--clr-card); color: var(--clr-text); outline: none;">
+                  <option value="all">Semua Bulan</option>
+                  <option value="0">Januari</option>
+                  <option value="1">Februari</option>
+                  <option value="2">Maret</option>
+                  <option value="3">April</option>
+                  <option value="4">Mei</option>
+                  <option value="5">Juni</option>
+                  <option value="6">Juli</option>
+                  <option value="7">Agustus</option>
+                  <option value="8">September</option>
+                  <option value="9">Oktober</option>
+                  <option value="10">November</option>
+                  <option value="11">Desember</option>
+                </select>
+                <select id="admin-complaint-filter-week" class="filter-select" style="padding: 6px 10px; border-radius: 6px; border: 1px solid var(--clr-border); font-size: 12.5px; font-weight: 600; background: var(--clr-card); color: var(--clr-text); outline: none;">
+                  <option value="all">Semua Minggu</option>
+                  <option value="1">Minggu 1</option>
+                  <option value="2">Minggu 2</option>
+                  <option value="3">Minggu 3</option>
+                  <option value="4">Minggu 4</option>
+                  <option value="5">Minggu 5</option>
+                </select>
+              </div>
+
               <div class="table-container">
                 <table class="reports-table">
                   <thead>
@@ -885,6 +917,6 @@
   <!-- jsPDF libraries for PDF generation -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
-  <script src="app.js?v=1787212254"></script>
+  <script src="app.js?v=1787230663"></script>
 </body>
 </html>
