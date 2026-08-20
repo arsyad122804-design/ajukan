@@ -3266,6 +3266,7 @@ function renderComplaints() {
         `;
         tbodyUserAll.appendChild(tr);
       });
+    }
   }
 }
 
