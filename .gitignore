@@ -1,8 +1,6 @@
-﻿node_modules/
+node_modules/
 app-dist/
 dist/
 *.exe
 *.zip
-.DS_Store
-package.json
-package-lock.json
+.DS_Store
