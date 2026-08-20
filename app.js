@@ -3,8 +3,8 @@
 // =====================================================
 
 // ---- State ----
-const SUPABASE_URL = "YOUR_SUPABASE_URL/rest/v1/pengajuan";
-const SUPABASE_KEY = "YOUR_SUPABASE_KEY";
+const SUPABASE_URL = "https://voyryhdbvtspwffqbjat.supabase.co/rest/v1/pengajuan";
+const SUPABASE_KEY = "sb_publishable_Z0opCA6P_TkjJn_OhMtoUQ_0a6W2HnP";
 const API_HEADERS = {
   "Content-Type": "application/json",
   "apikey": SUPABASE_KEY,
