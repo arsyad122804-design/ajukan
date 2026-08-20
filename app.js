@@ -3029,6 +3029,17 @@ function renderComplaints() {
     const emptyState = document.getElementById("complaint-empty-state");
     tbodyAdmin.innerHTML = "";
 
+    const isAdmin = session.role === "admin";
+    
+    // Conditionally show/hide the Aksi header column
+    const table = tbodyAdmin.closest("table");
+    if (table) {
+      const thAksi = table.querySelector("thead th:last-child");
+      if (thAksi) {
+        thAksi.style.display = isAdmin ? "" : "none";
+      }
+    }
+
     if (complaints.length === 0) {
       if (emptyState) emptyState.style.display = "block";
       document.getElementById("complaint-count-new").textContent = "0";
@@ -3066,12 +3077,25 @@ function renderComplaints() {
 
       complaints.forEach((c, idx) => {
         const tr = document.createElement("tr");
-        const statusOpts = ["Baru", "Menunggu", "Diperbaiki", "Selesai"];
-        const statusSelect = `
-          <select onchange="updateComplaintStatus(${c.id}, this.value)" style="padding: 6px 10px; border-radius: 6px; border: 1px solid var(--clr-border); font-size: 12px; font-weight: 600; background: var(--clr-card); color: var(--clr-text); outline: none; cursor: pointer;">
-            ${statusOpts.map(opt => `<option value="${opt}" ${c.status === opt ? 'selected' : ''}>${opt}</option>`).join('')}
-          </select>
-        `;
+        
+        let statusHtml = "";
+        if (isAdmin) {
+          const statusOpts = ["Baru", "Menunggu", "Diperbaiki", "Selesai"];
+          statusHtml = `
+            <select onchange="updateComplaintStatus(${c.id}, this.value)" style="padding: 6px 10px; border-radius: 6px; border: 1px solid var(--clr-border); font-size: 12px; font-weight: 600; background: var(--clr-card); color: var(--clr-text); outline: none; cursor: pointer;">
+              ${statusOpts.map(opt => `<option value="${opt}" ${c.status === opt ? 'selected' : ''}>${opt}</option>`).join('')}
+            </select>
+          `;
+        } else {
+          const badgeStyles = {
+            "Baru": "background: #fef2f2; color: #ef4444; border: 1px solid #fee2e2; padding: 4px 10px; border-radius: 6px; font-weight: 700; font-size: 11px; display: inline-block;",
+            "Menunggu": "background: #fff7ed; color: #f97316; border: 1px solid #ffedd5; padding: 4px 10px; border-radius: 6px; font-weight: 700; font-size: 11px; display: inline-block;",
+            "Diperbaiki": "background: #eff6ff; color: #3b82f6; border: 1px solid #dbeafe; padding: 4px 10px; border-radius: 6px; font-weight: 700; font-size: 11px; display: inline-block;",
+            "Selesai": "background: #f0fdf4; color: #22c55e; border: 1px solid #dcfce7; padding: 4px 10px; border-radius: 6px; font-weight: 700; font-size: 11px; display: inline-block;"
+          };
+          const badgeStyle = badgeStyles[c.status] || badgeStyles["Baru"];
+          statusHtml = `<span style="${badgeStyle}">${c.status || 'Baru'}</span>`;
+        }
 
         tr.innerHTML = `
           <td>${idx + 1}</td>
@@ -3082,12 +3106,14 @@ function renderComplaints() {
           <td style="font-weight:600; font-size: 13px; color: var(--clr-muted);">${c.kategori || '—'}</td>
           <td style="font-size: 13px; color: var(--clr-text); font-weight: 500;">${c.keluhan || '—'}</td>
           <td style="font-size:12px; color:var(--clr-muted); font-weight: 500;">${c.tanggal || '—'}</td>
-          <td>${statusSelect}</td>
-          <td>
-            <button onclick="deleteComplaint(${c.id})" class="btn-remove-item" style="padding:6px; background: transparent; border: none; color: #ef4444; cursor: pointer; display: flex; align-items: center; justify-content: center; border-radius: 6px; transition: background 0.2s;" title="Hapus Pengaduan">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px; height:15px;"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-            </button>
-          </td>
+          <td>${statusHtml}</td>
+          ${isAdmin ? `
+            <td>
+              <button onclick="deleteComplaint(${c.id})" class="btn-remove-item" style="padding:6px; background: transparent; border: none; color: #ef4444; cursor: pointer; display: flex; align-items: center; justify-content: center; border-radius: 6px; transition: background 0.2s;" title="Hapus Pengaduan">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px; height:15px;"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+              </button>
+            </td>
+          ` : ''}
         `;
         tbodyAdmin.appendChild(tr);
       });
