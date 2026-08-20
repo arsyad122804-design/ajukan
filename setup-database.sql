@@ -35,3 +35,26 @@ CREATE POLICY "Allow update" ON public.pengajuan
 -- Policy: semua user bisa delete data
 CREATE POLICY "Allow delete" ON public.pengajuan
   FOR DELETE USING (true);
+
+
+-- =====================================================
+-- TABEL PENGADUAN (DASHBOARD KELUHAN)
+-- =====================================================
+CREATE TABLE IF NOT EXISTS public.pengaduan (
+  id             BIGINT PRIMARY KEY,
+  barang_lokasi  TEXT NOT NULL,
+  keluhan        TEXT NOT NULL,
+  tanggal        TEXT DEFAULT '',
+  status         TEXT DEFAULT 'Baru', -- 'Baru', 'Menunggu', 'Diperbaiki', 'Selesai'
+  pengaju        TEXT DEFAULT '',
+  email_pengaju  TEXT DEFAULT '',
+  kategori       TEXT DEFAULT 'Lainnya' -- 'Elektronik', 'Peralatan Kelas', 'Fasilitas Umum', 'Lainnya'
+);
+
+-- Aktifkan RLS untuk pengaduan
+ALTER TABLE public.pengaduan ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow read pengaduan" ON public.pengaduan FOR SELECT USING (true);
+CREATE POLICY "Allow insert pengaduan" ON public.pengaduan FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow update pengaduan" ON public.pengaduan FOR UPDATE USING (true);
+CREATE POLICY "Allow delete pengaduan" ON public.pengaduan FOR DELETE USING (true);

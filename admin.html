@@ -479,30 +479,138 @@
           </div>
         </section>
 
-        <!-- ============ SEND REPORT VIEW ============ -->
+        <!-- ============ COMPLAINTS DASHBOARD VIEW ============ -->
         <section id="view-send-report" class="tab-view">
           <div class="view-page-header">
-            <h2>Kirim Laporan / Pengaduan</h2>
-            <p>Kirimkan pengaduan, masukan, keluhan, atau masalah Anda langsung ke Administrator sistem.</p>
+            <h2>Dashboard Pengaduan Fasilitas</h2>
+            <p>Pantau dan tindaklanjuti laporan kerusakan barang dari pengaju.</p>
           </div>
 
-          <div class="submission-list-card" style="max-width: 650px; margin: 0 auto; padding: 24px;">
-            <form id="form-send-report">
-              <div class="form-group" style="margin-bottom: 20px;">
-                <label for="report-subject" style="font-weight: 600; font-size: 14px; margin-bottom: 8px; display: block;">Subyek Laporan</label>
-                <input type="text" id="report-subject" class="filter-input" style="width: 100%; height: 42px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--clr-border);" placeholder="Contoh: Kerusakan Alat, Masalah Akun, Masukan Layanan" required>
+          <!-- Cards Row -->
+          <div class="dashboard-cards" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px;">
+            <div class="card" style="background: var(--clr-card); border: 1px solid var(--clr-border); border-radius: 12px; padding: 20px; display: flex; align-items: center; gap: 16px;">
+              <div style="width: 48px; height: 48px; border-radius: 50%; background: #fef2f2; display: flex; align-items: center; justify-content: center; color: #ef4444;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 24px; height: 24px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              </div>
+              <div>
+                <span style="font-size: 13px; color: var(--clr-muted); font-weight: 600;">Pengaduan Baru</span>
+                <h3 id="complaint-count-new" style="font-size: 24px; font-weight: 700; color: var(--clr-text); margin: 4px 0 2px 0;">0</h3>
+                <span style="font-size: 11px; color: #ef4444; font-weight: 600;">Belum ditindaklanjuti</span>
+              </div>
+            </div>
+
+            <div class="card" style="background: var(--clr-card); border: 1px solid var(--clr-border); border-radius: 12px; padding: 20px; display: flex; align-items: center; gap: 16px;">
+              <div style="width: 48px; height: 48px; border-radius: 50%; background: #fff7ed; display: flex; align-items: center; justify-content: center; color: #f97316;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 24px; height: 24px;"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              </div>
+              <div>
+                <span style="font-size: 13px; color: var(--clr-muted); font-weight: 600;">Menunggu Perbaikan</span>
+                <h3 id="complaint-count-waiting" style="font-size: 24px; font-weight: 700; color: var(--clr-text); margin: 4px 0 2px 0;">0</h3>
+                <span style="font-size: 11px; color: #f97316; font-weight: 600;">Sedang dijadwalkan</span>
+              </div>
+            </div>
+
+            <div class="card" style="background: var(--clr-card); border: 1px solid var(--clr-border); border-radius: 12px; padding: 20px; display: flex; align-items: center; gap: 16px;">
+              <div style="width: 48px; height: 48px; border-radius: 50%; background: #eff6ff; display: flex; align-items: center; justify-content: center; color: #3b82f6;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 24px; height: 24px;"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+              </div>
+              <div>
+                <span style="font-size: 13px; color: var(--clr-muted); font-weight: 600;">Sedang Diperbaiki</span>
+                <h3 id="complaint-count-process" style="font-size: 24px; font-weight: 700; color: var(--clr-text); margin: 4px 0 2px 0;">0</h3>
+                <span style="font-size: 11px; color: #3b82f6; font-weight: 600;">Dalam proses</span>
+              </div>
+            </div>
+
+            <div class="card" style="background: var(--clr-card); border: 1px solid var(--clr-border); border-radius: 12px; padding: 20px; display: flex; align-items: center; gap: 16px;">
+              <div style="width: 48px; height: 48px; border-radius: 50%; background: #f0fdf4; display: flex; align-items: center; justify-content: center; color: #22c55e;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 24px; height: 24px;"><polyline points="20 6 9 17 4 12"/></svg>
+              </div>
+              <div>
+                <span style="font-size: 13px; color: var(--clr-muted); font-weight: 600;">Selesai Diperbaiki</span>
+                <h3 id="complaint-count-done" style="font-size: 24px; font-weight: 700; color: var(--clr-text); margin: 4px 0 2px 0;">0</h3>
+                <span style="font-size: 11px; color: #22c55e; font-weight: 600;">Telah diselesaikan</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Main Layout Split -->
+          <div class="complaints-layout-split" style="display: grid; grid-template-columns: 1fr 300px; gap: 20px; align-items: start;">
+            
+            <!-- Left Side: Table -->
+            <div style="background: var(--clr-card); border: 1px solid var(--clr-border); border-radius: 12px; padding: 20px;">
+              <h3 style="font-size: 16px; font-weight: 700; color: var(--clr-text); margin-bottom: 16px;">Daftar Pengaduan</h3>
+              
+              <div class="table-container">
+                <table class="reports-table">
+                  <thead>
+                    <tr>
+                      <th style="width: 60px;">No</th>
+                      <th>Barang / Lokasi</th>
+                      <th>Kategori</th>
+                      <th>Keluhan</th>
+                      <th>Tanggal</th>
+                      <th>Status</th>
+                      <th style="width: 50px;">Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody id="complaint-table-body">
+                    <!-- Complaints injected here -->
+                  </tbody>
+                </table>
+              </div>
+              <div class="empty-state" id="complaint-empty-state" style="display: none; padding: 32px 0;">
+                <p>Belum ada laporan pengaduan masuk.</p>
+              </div>
+            </div>
+
+            <!-- Right Side: Analytics Info -->
+            <div style="display: flex; flex-direction: column; gap: 20px;">
+              
+              <!-- Card: Kategori Terbanyak -->
+              <div style="background: var(--clr-card); border: 1px solid var(--clr-border); border-radius: 12px; padding: 20px;">
+                <h3 style="font-size: 15px; font-weight: 700; color: var(--clr-text); margin-bottom: 16px;">Kategori Terbanyak</h3>
+                <div style="display: flex; flex-direction: column; gap: 12px;">
+                  <div>
+                    <div style="display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; margin-bottom: 4px;">
+                      <span>Elektronik</span>
+                      <span id="cat-count-elektronik">0</span>
+                    </div>
+                    <div style="height: 6px; background: #e2e8f0; border-radius: 3px; overflow: hidden;">
+                      <div id="cat-bar-elektronik" style="height: 100%; background: #3b82f6; width: 0%; transition: width 0.5s ease;"></div>
+                    </div>
+                  </div>
+                  <div>
+                    <div style="display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; margin-bottom: 4px;">
+                      <span>Peralatan Kelas</span>
+                      <span id="cat-count-kelas">0</span>
+                    </div>
+                    <div style="height: 6px; background: #e2e8f0; border-radius: 3px; overflow: hidden;">
+                      <div id="cat-bar-kelas" style="height: 100%; background: #f59e0b; width: 0%; transition: width 0.5s ease;"></div>
+                    </div>
+                  </div>
+                  <div>
+                    <div style="display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; margin-bottom: 4px;">
+                      <span>Fasilitas Umum</span>
+                      <span id="cat-count-umum">0</span>
+                    </div>
+                    <div style="height: 6px; background: #e2e8f0; border-radius: 3px; overflow: hidden;">
+                      <div id="cat-bar-umum" style="height: 100%; background: #10b981; width: 0%; transition: width 0.5s ease;"></div>
+                    </div>
+                  </div>
+                  <div>
+                    <div style="display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; margin-bottom: 4px;">
+                      <span>Lainnya</span>
+                      <span id="cat-count-lain">0</span>
+                    </div>
+                    <div style="height: 6px; background: #e2e8f0; border-radius: 3px; overflow: hidden;">
+                      <div id="cat-bar-lain" style="height: 100%; background: #6b7280; width: 0%; transition: width 0.5s ease;"></div>
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              <div class="form-group" style="margin-bottom: 20px;">
-                <label for="report-content" style="font-weight: 600; font-size: 14px; margin-bottom: 8px; display: block;">Isi Laporan / Detail Pengaduan</label>
-                <textarea id="report-content" class="filter-input" style="width: 100%; height: 140px; padding: 12px 14px; border-radius: 8px; border: 1px solid var(--clr-border); resize: vertical; font-family: inherit; font-size: 14px; font-weight: 600;" placeholder="Tuliskan secara detail laporan Anda di sini..." required></textarea>
-              </div>
+            </div>
 
-              <button type="submit" class="btn-primary" style="width: 100%; height: 46px; font-size: 14px; justify-content: center; border-radius: 10px; cursor: pointer;">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-                Kirim Laporan ke Admin
-              </button>
-            </form>
           </div>
         </section>
 
@@ -777,6 +885,6 @@
   <!-- jsPDF libraries for PDF generation -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
-  <script src="app.js?v=1787208050"></script>
+  <script src="app.js?v=1787208820"></script>
 </body>
 </html>

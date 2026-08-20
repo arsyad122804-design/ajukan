@@ -417,6 +417,12 @@ async function fetchItems() {
     loadCachedItems();
   }
 
+  try {
+    await fetchComplaints();
+  } catch (e) {
+    console.error("Gagal load pengaduan:", e);
+  }
+
   if (t) t.textContent = oldT;
   updateUI();
 }
@@ -2975,14 +2981,162 @@ const tableObserver = new MutationObserver(() => {
 tableObserver.observe(document.body, { childList: true, subtree: true });
 
 // =====================================================
-// KIRIM LAPORAN / PENGADUAN
+// COMPLAINTS (PENGADUAN) SYSTEM
 // =====================================================
+let complaints = [];
+
+async function fetchComplaints() {
+  const tbody = document.getElementById("complaint-table-body");
+  if (!tbody) return; // Only fetch if dashboard elements exist (admin.html)
+
+  try {
+    const url = "https://voyryhdbvtspwffqbjat.supabase.co/rest/v1/pengaduan?order=id.desc";
+    const res = await fetch(url, { headers: API_HEADERS });
+    const data = await res.json();
+    if (Array.isArray(data)) {
+      complaints = data;
+      renderComplaints();
+    }
+  } catch (err) {
+    console.error("Gagal mengambil data pengaduan:", err);
+  }
+}
+
+function renderComplaints() {
+  const tbody = document.getElementById("complaint-table-body");
+  const emptyState = document.getElementById("complaint-empty-state");
+  if (!tbody) return;
+
+  tbody.innerHTML = "";
+
+  if (complaints.length === 0) {
+    if (emptyState) emptyState.style.display = "block";
+    
+    // Reset stats
+    document.getElementById("complaint-count-new").textContent = "0";
+    document.getElementById("complaint-count-waiting").textContent = "0";
+    document.getElementById("complaint-count-process").textContent = "0";
+    document.getElementById("complaint-count-done").textContent = "0";
+    return;
+  }
+
+  if (emptyState) emptyState.style.display = "none";
+
+  // 1. Calculate Status Counts
+  const countNew = complaints.filter(c => c.status === "Baru").length;
+  const countWaiting = complaints.filter(c => c.status === "Menunggu").length;
+  const countProcess = complaints.filter(c => c.status === "Diperbaiki").length;
+  const countDone = complaints.filter(c => c.status === "Selesai").length;
+
+  document.getElementById("complaint-count-new").textContent = countNew;
+  document.getElementById("complaint-count-waiting").textContent = countWaiting;
+  document.getElementById("complaint-count-process").textContent = countProcess;
+  document.getElementById("complaint-count-done").textContent = countDone;
+
+  // 2. Calculate Category Stats
+  const catElektronik = complaints.filter(c => c.kategori === "Elektronik").length;
+  const catKelas = complaints.filter(c => c.kategori === "Peralatan Kelas").length;
+  const catUmum = complaints.filter(c => c.kategori === "Fasilitas Umum").length;
+  const catLain = complaints.filter(c => c.kategori === "Lainnya").length;
+  const totalCat = complaints.length || 1;
+
+  document.getElementById("cat-count-elektronik").textContent = catElektronik;
+  document.getElementById("cat-count-kelas").textContent = catKelas;
+  document.getElementById("cat-count-umum").textContent = catUmum;
+  document.getElementById("cat-count-lain").textContent = catLain;
+
+  document.getElementById("cat-bar-elektronik").style.width = `${(catElektronik / totalCat) * 100}%`;
+  document.getElementById("cat-bar-kelas").style.width = `${(catKelas / totalCat) * 100}%`;
+  document.getElementById("cat-bar-umum").style.width = `${(catUmum / totalCat) * 100}%`;
+  document.getElementById("cat-bar-lain").style.width = `${(catLain / totalCat) * 100}%`;
+
+  // 3. Render Table Rows
+  complaints.forEach((c, idx) => {
+    const tr = document.createElement("tr");
+    
+    // Status select rendering
+    const statusOpts = ["Baru", "Menunggu", "Diperbaiki", "Selesai"];
+    const statusSelect = `
+      <select onchange="updateComplaintStatus(${c.id}, this.value)" style="padding: 6px 10px; border-radius: 6px; border: 1px solid var(--clr-border); font-size: 12px; font-weight: 600; background: var(--clr-card); color: var(--clr-text); outline: none; cursor: pointer;">
+        ${statusOpts.map(opt => `<option value="${opt}" ${c.status === opt ? 'selected' : ''}>${opt}</option>`).join('')}
+      </select>
+    `;
+
+    tr.innerHTML = `
+      <td>${idx + 1}</td>
+      <td>
+        <strong style="font-size:13px; color:var(--clr-text); display:block;">${c.barang_lokasi || '—'}</strong>
+        <span style="font-size:11px; color:var(--clr-muted); font-weight: 500;">Oleh: ${c.pengaju || '—'}</span>
+      </td>
+      <td style="font-weight:600; font-size: 13px; color: var(--clr-muted);">${c.kategori || '—'}</td>
+      <td style="font-size: 13px; color: var(--clr-text); font-weight: 500;">${c.keluhan || '—'}</td>
+      <td style="font-size:12px; color:var(--clr-muted); font-weight: 500;">${c.tanggal || '—'}</td>
+      <td>${statusSelect}</td>
+      <td>
+        <button onclick="deleteComplaint(${c.id})" class="btn-remove-item" style="padding:6px; background: transparent; border: none; color: #ef4444; cursor: pointer; display: flex; align-items: center; justify-content: center; border-radius: 6px; transition: background 0.2s;" title="Hapus Pengaduan">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px; height:15px;"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        </button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+window.updateComplaintStatus = async function(id, newStatus) {
+  try {
+    const url = `https://voyryhdbvtspwffqbjat.supabase.co/rest/v1/pengaduan?id=eq.${id}`;
+    const res = await fetch(url, {
+      method: "PATCH",
+      headers: API_HEADERS,
+      body: JSON.stringify({ status: newStatus })
+    });
+    
+    if (res.ok) {
+      showToast(`✅ Status pengaduan berhasil diubah ke: ${newStatus}`);
+      const comp = complaints.find(c => c.id == id);
+      if (comp) comp.status = newStatus;
+      renderComplaints();
+    } else {
+      const err = await res.json();
+      alert(`⚠️ Gagal update status: ${err.message}`);
+    }
+  } catch (err) {
+    console.error("Error update status pengaduan:", err);
+    alert(`⚠️ Error koneksi: ${err.message}`);
+  }
+};
+
+window.deleteComplaint = async function(id) {
+  if (!confirm("Apakah Anda yakin ingin menghapus laporan pengaduan ini?")) return;
+  try {
+    const url = `https://voyryhdbvtspwffqbjat.supabase.co/rest/v1/pengaduan?id=eq.${id}`;
+    const res = await fetch(url, {
+      method: "DELETE",
+      headers: API_HEADERS
+    });
+    
+    if (res.ok) {
+      showToast("✅ Pengaduan berhasil dihapus.");
+      complaints = complaints.filter(c => c.id != id);
+      renderComplaints();
+    } else {
+      const err = await res.json();
+      alert(`⚠️ Gagal menghapus: ${err.message}`);
+    }
+  } catch (err) {
+    console.error("Error menghapus pengaduan:", err);
+    alert(`⚠️ Error koneksi: ${err.message}`);
+  }
+};
+
+// Form submit handler (User View)
 const formSendReport = document.getElementById("form-send-report");
 if (formSendReport) {
   formSendReport.addEventListener("submit", async e => {
     e.preventDefault();
     
     const subject = document.getElementById("report-subject").value.trim();
+    const category = document.getElementById("report-category").value;
     const content = document.getElementById("report-content").value.trim();
     
     const btnSubmit = e.target.querySelector("button[type='submit']");
@@ -2998,29 +3152,58 @@ if (formSendReport) {
       const adminEmail = getRoleEmail("admin") || "fikriarsyad20041928@gmail.com";
       const today = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
 
-      const emailMessage = `Assalamu'alaikum, terdapat laporan/pengaduan baru dari pengguna sistem.
+      // 1. Save to Supabase table
+      const newComplaint = {
+        id: Date.now() + Math.floor(Math.random() * 1000),
+        barang_lokasi: subject,
+        keluhan: content,
+        tanggal: today,
+        status: "Baru",
+        pengaju: reporterName,
+        email_pengaju: reporterEmail,
+        kategori: category
+      };
+
+      const supabaseUrl = "https://voyryhdbvtspwffqbjat.supabase.co/rest/v1/pengaduan";
+      const res = await fetch(supabaseUrl, {
+        method: "POST",
+        headers: API_HEADERS,
+        body: JSON.stringify(newComplaint)
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || "Gagal menyimpan pengaduan ke database.");
+      }
+
+      // 2. Send email notification
+      const emailMessage = `Assalamu'alaikum, terdapat laporan/pengaduan kerusakan baru dari pengguna sistem.
 
 👤 Pengirim: ${reporterName} (${reporterEmail})
 📅 Tanggal: ${today}
-📋 Subyek: ${subject}
+🏷️ Kategori: ${category}
+📋 Barang / Lokasi: ${subject}
 
-💬 Detail Laporan:
+💬 Detail Keluhan:
 ${content}
 
 Jazakumullahu khairan.`;
 
       const extraParams = {
-        item_name: `Laporan: ${subject}`,
-        item_dept: "Laporan Pengaduan",
+        item_name: `Pengaduan: ${subject}`,
+        item_dept: `Kategori: ${category}`,
         item_qty: "1",
         item_pengaju: reporterName
       };
 
-      const success = await sendEmailDirect(adminEmail, `[Laporan Masuk] ${subject}`, emailMessage, extraParams);
-      if (success) {
-        showToast("✅ Laporan Anda berhasil dikirim ke Admin!");
-        formSendReport.reset();
-      }
+      await sendEmailDirect(adminEmail, `[Pengaduan Baru] ${subject}`, emailMessage, extraParams);
+      
+      showToast("✅ Laporan pengaduan Anda berhasil terkirim ke Admin!");
+      formSendReport.reset();
+      
+      // If we are in admin view (unlikely when submitting), reload list
+      await fetchComplaints();
+
     } catch (err) {
       console.error("Gagal mengirim laporan:", err);
       alert(`⚠️ ERROR: ${err.message}`);

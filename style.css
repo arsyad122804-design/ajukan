@@ -2472,3 +2472,9 @@ body.role-staff .col-aksi {
     text-align: left;
   }
 }
+
+@media (max-width: 900px) {
+  .complaints-layout-split {
+    grid-template-columns: 1fr !important;
+  }
+}
