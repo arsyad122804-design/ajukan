@@ -556,6 +556,7 @@ const PAGE_TITLES = {
   approval: "Persetujuan",
   reports: "Laporan",
   profile: "Profil Saya",
+  "send-report": "Kirim Laporan / Pengaduan",
   "admin-history": "Riwayat Persetujuan",
   "admin-purchases": "Status Pembelian"
 };
@@ -2972,3 +2973,60 @@ const tableObserver = new MutationObserver(() => {
   });
 });
 tableObserver.observe(document.body, { childList: true, subtree: true });
+
+// =====================================================
+// KIRIM LAPORAN / PENGADUAN
+// =====================================================
+const formSendReport = document.getElementById("form-send-report");
+if (formSendReport) {
+  formSendReport.addEventListener("submit", async e => {
+    e.preventDefault();
+    
+    const subject = document.getElementById("report-subject").value.trim();
+    const content = document.getElementById("report-content").value.trim();
+    
+    const btnSubmit = e.target.querySelector("button[type='submit']");
+    const originalText = btnSubmit.innerHTML;
+    btnSubmit.innerHTML = `<span style="opacity:0.6;">Mengirim...</span>`;
+    btnSubmit.disabled = true;
+
+    try {
+      const session = JSON.parse(sessionStorage.getItem("spms_user") || "{}");
+      const reporterName = session.name || "Pengguna";
+      const reporterEmail = session.username || "—";
+      
+      const adminEmail = getRoleEmail("admin") || "fikriarsyad20041928@gmail.com";
+      const today = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+
+      const emailMessage = `Assalamu'alaikum, terdapat laporan/pengaduan baru dari pengguna sistem.
+
+👤 Pengirim: ${reporterName} (${reporterEmail})
+📅 Tanggal: ${today}
+📋 Subyek: ${subject}
+
+💬 Detail Laporan:
+${content}
+
+Jazakumullahu khairan.`;
+
+      const extraParams = {
+        item_name: `Laporan: ${subject}`,
+        item_dept: "Laporan Pengaduan",
+        item_qty: "1",
+        item_pengaju: reporterName
+      };
+
+      const success = await sendEmailDirect(adminEmail, `[Laporan Masuk] ${subject}`, emailMessage, extraParams);
+      if (success) {
+        showToast("✅ Laporan Anda berhasil dikirim ke Admin!");
+        formSendReport.reset();
+      }
+    } catch (err) {
+      console.error("Gagal mengirim laporan:", err);
+      alert(`⚠️ ERROR: ${err.message}`);
+    } finally {
+      btnSubmit.innerHTML = originalText;
+      btnSubmit.disabled = false;
+    }
+  });
+}

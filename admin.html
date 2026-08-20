@@ -89,6 +89,13 @@
           <span>Profil Saya</span>
           <div class="nav-active-bar"></div>
         </button>
+        <button class="nav-item" data-tab="send-report" id="nav-send-report">
+          <div class="nav-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          </div>
+          <span>Kirim Laporan</span>
+          <div class="nav-active-bar"></div>
+        </button>
       </nav>
     </aside>
 
@@ -472,6 +479,33 @@
           </div>
         </section>
 
+        <!-- ============ SEND REPORT VIEW ============ -->
+        <section id="view-send-report" class="tab-view" style="display: none;">
+          <div class="view-page-header">
+            <h2>Kirim Laporan / Pengaduan</h2>
+            <p>Kirimkan pengaduan, masukan, keluhan, atau masalah Anda langsung ke Administrator sistem.</p>
+          </div>
+
+          <div class="submission-list-card" style="max-width: 650px; margin: 0 auto; padding: 24px;">
+            <form id="form-send-report">
+              <div class="form-group" style="margin-bottom: 20px;">
+                <label for="report-subject" style="font-weight: 600; font-size: 14px; margin-bottom: 8px; display: block;">Subyek Laporan</label>
+                <input type="text" id="report-subject" class="filter-input" style="width: 100%; height: 42px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--clr-border);" placeholder="Contoh: Kerusakan Alat, Masalah Akun, Masukan Layanan" required>
+              </div>
+
+              <div class="form-group" style="margin-bottom: 20px;">
+                <label for="report-content" style="font-weight: 600; font-size: 14px; margin-bottom: 8px; display: block;">Isi Laporan / Detail Pengaduan</label>
+                <textarea id="report-content" class="filter-input" style="width: 100%; height: 140px; padding: 12px 14px; border-radius: 8px; border: 1px solid var(--clr-border); resize: vertical; font-family: inherit; font-size: 14px; font-weight: 600;" placeholder="Tuliskan secara detail laporan Anda di sini..." required></textarea>
+              </div>
+
+              <button type="submit" class="btn-primary" style="width: 100%; height: 46px; font-size: 14px; justify-content: center; border-radius: 10px; cursor: pointer;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                Kirim Laporan ke Admin
+              </button>
+            </form>
+          </div>
+        </section>
+
       </div><!-- end views-wrapper -->
 
       <!-- Bottom Nav (Mobile) -->
@@ -499,6 +533,10 @@
         <button class="nav-item" data-tab="profile">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
           <span>Profil</span>
+        </button>
+        <button class="nav-item" data-tab="send-report">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          <span>Aduan</span>
         </button>
       </footer>
 
@@ -739,6 +777,6 @@
   <!-- jsPDF libraries for PDF generation -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
-  <script src="app.js?v=1787205146"></script>
+  <script src="app.js?v=1787207467"></script>
 </body>
 </html>
