@@ -519,6 +519,9 @@ const tableEmptyState   = document.getElementById("table-empty-state");
 const searchBar         = document.getElementById("search-bar");
 const filterDept        = document.getElementById("filter-dept");
 const filterUrgency     = document.getElementById("filter-urgency");
+const filterYear        = document.getElementById("filter-year");
+const filterMonth       = document.getElementById("filter-month");
+const filterWeek        = document.getElementById("filter-week");
 const btnExportPDF      = document.getElementById("btn-export-pdf");
 const btnAddReport      = document.getElementById("btn-add-report");
 
@@ -1223,6 +1226,21 @@ function showToast(msg) {
   }, 3000);
 }
 
+function parseDateString(dateStr) {
+  if (!dateStr) return null;
+  const months = {
+    jan: 0, feb: 1, mar: 2, apr: 3, mei: 4, jun: 5, jul: 6, agt: 7, agu: 7, sep: 8, okt: 9, nov: 10, des: 11,
+    januari: 0, februari: 1, maret: 2, april: 3, mei: 4, juni: 5, juli: 6, agustus: 7, september: 8, oktober: 9, november: 10, desember: 11
+  };
+  const parts = dateStr.toLowerCase().split(/\s+/);
+  if (parts.length < 3) return null;
+  const day = parseInt(parts[0]) || 1;
+  const monthName = parts[1];
+  const year = parseInt(parts[2]) || new Date().getFullYear();
+  const month = months[monthName] !== undefined ? months[monthName] : 0;
+  return new Date(year, month, day);
+}
+
 // =====================================================
 // TABLE RENDER
 // =====================================================
@@ -1232,12 +1250,34 @@ function renderTable() {
   const query   = (searchBar?.value || "").toLowerCase();
   const deptF   = filterDept?.value   || "all";
   const urgencyF = filterUrgency?.value || "all";
+  const yearF   = filterYear?.value    || "all";
+  const monthF  = filterMonth?.value   || "all";
+  const weekF   = filterWeek?.value    || "all";
 
   const filtered = items.filter(item => {
     const matchSearch  = item.name.toLowerCase().includes(query);
     const matchDept    = deptF === "all" || item.dept === deptF;
     const matchUrgency = urgencyF === "all" || item.urgency === urgencyF;
-    return matchSearch && matchDept && matchUrgency;
+
+    let matchDate = true;
+    if (yearF !== "all" || monthF !== "all" || weekF !== "all") {
+      const dateObj = parseDateString(item.tanggal);
+      if (dateObj) {
+        const itemYear = dateObj.getFullYear();
+        const itemMonth = dateObj.getMonth();
+        const itemWeek = Math.ceil(dateObj.getDate() / 7);
+
+        const matchYear = yearF === "all" || String(itemYear) === yearF;
+        const matchMonth = monthF === "all" || String(itemMonth) === monthF;
+        const matchWeek = weekF === "all" || String(itemWeek) === weekF;
+
+        matchDate = matchYear && matchMonth && matchWeek;
+      } else {
+        matchDate = yearF === "all" && monthF === "all" && weekF === "all";
+      }
+    }
+
+    return matchSearch && matchDept && matchUrgency && matchDate;
   });
 
   reportsTableBody.innerHTML = "";
@@ -1307,6 +1347,9 @@ function renderTable() {
 if (searchBar)      searchBar.addEventListener("input", renderTable);
 if (filterDept)     filterDept.addEventListener("change", renderTable);
 if (filterUrgency)  filterUrgency.addEventListener("change", renderTable);
+if (filterYear)     filterYear.addEventListener("change", renderTable);
+if (filterMonth)    filterMonth.addEventListener("change", renderTable);
+if (filterWeek)     filterWeek.addEventListener("change", renderTable);
 
 // =====================================================
 // SUBMISSION TABLE (Dashboard)
