@@ -68,6 +68,14 @@
           <div class="nav-active-bar"></div>
         </button>
 
+        <button class="nav-item" data-tab="status-pengaduan" id="nav-status-pengaduan">
+          <div class="nav-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </div>
+          <span>Status Pengaduan</span>
+          <div class="nav-active-bar"></div>
+        </button>
+
         <button class="nav-item" data-tab="profile" id="nav-profile">
           <div class="nav-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
@@ -454,6 +462,140 @@
           </div>
         </section>
 
+        <!-- ============ STATUS PENGADUAN VIEW ============ -->
+        <section id="view-status-pengaduan" class="tab-view" style="display: none;">
+          <div class="view-page-header">
+            <h2>Status & Perkembangan Pengaduan</h2>
+            <p>Pantau status perbaikan fasilitas sekolah yang telah dilaporkan secara transparan.</p>
+          </div>
+
+          <!-- Cards Row -->
+          <div class="dashboard-cards" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px;">
+            <div class="card" style="background: var(--clr-card); border: 1px solid var(--clr-border); border-radius: 12px; padding: 20px; display: flex; align-items: center; gap: 16px;">
+              <div style="width: 48px; height: 48px; border-radius: 50%; background: #fef2f2; display: flex; align-items: center; justify-content: center; color: #ef4444;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 24px; height: 24px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              </div>
+              <div>
+                <span style="font-size: 13px; color: var(--clr-muted); font-weight: 600;">Pengaduan Baru</span>
+                <h3 id="user-status-count-new" style="font-size: 24px; font-weight: 700; color: var(--clr-text); margin: 4px 0 2px 0;">0</h3>
+                <span style="font-size: 11px; color: #ef4444; font-weight: 600;">Belum ditindaklanjuti</span>
+              </div>
+            </div>
+
+            <div class="card" style="background: var(--clr-card); border: 1px solid var(--clr-border); border-radius: 12px; padding: 20px; display: flex; align-items: center; gap: 16px;">
+              <div style="width: 48px; height: 48px; border-radius: 50%; background: #fff7ed; display: flex; align-items: center; justify-content: center; color: #f97316;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 24px; height: 24px;"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              </div>
+              <div>
+                <span style="font-size: 13px; color: var(--clr-muted); font-weight: 600;">Menunggu Perbaikan</span>
+                <h3 id="user-status-count-waiting" style="font-size: 24px; font-weight: 700; color: var(--clr-text); margin: 4px 0 2px 0;">0</h3>
+                <span style="font-size: 11px; color: #f97316; font-weight: 600;">Sedang dijadwalkan</span>
+              </div>
+            </div>
+
+            <div class="card" style="background: var(--clr-card); border: 1px solid var(--clr-border); border-radius: 12px; padding: 20px; display: flex; align-items: center; gap: 16px;">
+              <div style="width: 48px; height: 48px; border-radius: 50%; background: #eff6ff; display: flex; align-items: center; justify-content: center; color: #3b82f6;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 24px; height: 24px;"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+              </div>
+              <div>
+                <span style="font-size: 13px; color: var(--clr-muted); font-weight: 600;">Sedang Diperbaiki</span>
+                <h3 id="user-status-count-process" style="font-size: 24px; font-weight: 700; color: var(--clr-text); margin: 4px 0 2px 0;">0</h3>
+                <span style="font-size: 11px; color: #3b82f6; font-weight: 600;">Dalam proses</span>
+              </div>
+            </div>
+
+            <div class="card" style="background: var(--clr-card); border: 1px solid var(--clr-border); border-radius: 12px; padding: 20px; display: flex; align-items: center; gap: 16px;">
+              <div style="width: 48px; height: 48px; border-radius: 50%; background: #f0fdf4; display: flex; align-items: center; justify-content: center; color: #22c55e;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 24px; height: 24px;"><polyline points="20 6 9 17 4 12"/></svg>
+              </div>
+              <div>
+                <span style="font-size: 13px; color: var(--clr-muted); font-weight: 600;">Selesai Diperbaiki</span>
+                <h3 id="user-status-count-done" style="font-size: 24px; font-weight: 700; color: var(--clr-text); margin: 4px 0 2px 0;">0</h3>
+                <span style="font-size: 11px; color: #22c55e; font-weight: 600;">Telah diselesaikan</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Main Layout Split -->
+          <div class="complaints-layout-split" style="display: grid; grid-template-columns: 1fr 300px; gap: 20px; align-items: start;">
+            
+            <!-- Left Side: Table -->
+            <div style="background: var(--clr-card); border: 1px solid var(--clr-border); border-radius: 12px; padding: 20px;">
+              <h3 style="font-size: 16px; font-weight: 700; color: var(--clr-text); margin-bottom: 16px;">Daftar Pengaduan Sekolah</h3>
+              
+              <div class="table-container">
+                <table class="reports-table">
+                  <thead>
+                    <tr>
+                      <th style="width: 60px;">No</th>
+                      <th>Barang / Lokasi</th>
+                      <th>Kategori</th>
+                      <th>Keluhan</th>
+                      <th>Tanggal</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody id="user-all-complaints-table-body">
+                    <!-- All complaints injected here -->
+                  </tbody>
+                </table>
+              </div>
+              <div class="empty-state" id="user-all-complaints-empty-state" style="display: none; padding: 32px 0;">
+                <p>Belum ada laporan pengaduan masuk.</p>
+              </div>
+            </div>
+
+            <!-- Right Side: Analytics Info -->
+            <div style="display: flex; flex-direction: column; gap: 20px;">
+              
+              <!-- Card: Kategori Terbanyak -->
+              <div style="background: var(--clr-card); border: 1px solid var(--clr-border); border-radius: 12px; padding: 20px;">
+                <h3 style="font-size: 15px; font-weight: 700; color: var(--clr-text); margin-bottom: 16px;">Kategori Terbanyak</h3>
+                <div style="display: flex; flex-direction: column; gap: 12px;">
+                  <div>
+                    <div style="display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; margin-bottom: 4px;">
+                      <span>Elektronik</span>
+                      <span id="user-cat-count-elektronik">0</span>
+                    </div>
+                    <div style="height: 6px; background: #e2e8f0; border-radius: 3px; overflow: hidden;">
+                      <div id="user-cat-bar-elektronik" style="height: 100%; background: #3b82f6; width: 0%; transition: width 0.5s ease;"></div>
+                    </div>
+                  </div>
+                  <div>
+                    <div style="display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; margin-bottom: 4px;">
+                      <span>Peralatan Kelas</span>
+                      <span id="user-cat-count-kelas">0</span>
+                    </div>
+                    <div style="height: 6px; background: #e2e8f0; border-radius: 3px; overflow: hidden;">
+                      <div id="user-cat-bar-kelas" style="height: 100%; background: #f59e0b; width: 0%; transition: width 0.5s ease;"></div>
+                    </div>
+                  </div>
+                  <div>
+                    <div style="display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; margin-bottom: 4px;">
+                      <span>Fasilitas Umum</span>
+                      <span id="user-cat-count-umum">0</span>
+                    </div>
+                    <div style="height: 6px; background: #e2e8f0; border-radius: 3px; overflow: hidden;">
+                      <div id="user-cat-bar-umum" style="height: 100%; background: #10b981; width: 0%; transition: width 0.5s ease;"></div>
+                    </div>
+                  </div>
+                  <div>
+                    <div style="display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; margin-bottom: 4px;">
+                      <span>Lainnya</span>
+                      <span id="user-cat-count-lain">0</span>
+                    </div>
+                    <div style="height: 6px; background: #e2e8f0; border-radius: 3px; overflow: hidden;">
+                      <div id="user-cat-bar-lain" style="height: 100%; background: #6b7280; width: 0%; transition: width 0.5s ease;"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+          </div>
+        </section>
+
       </div><!-- end views-wrapper -->
 
       <!-- Bottom Nav (Mobile) -->
@@ -471,6 +613,11 @@
         <button class="nav-item" data-tab="send-report">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
           <span>Aduan</span>
+        </button>
+
+        <button class="nav-item" data-tab="status-pengaduan">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          <span>Status Aduan</span>
         </button>
 
         <button class="nav-item" data-tab="profile">
@@ -704,6 +851,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=1787209852"></script>
+  <script src="app.js?v=1787210620"></script>
 </body>
 </html>

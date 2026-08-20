@@ -376,7 +376,10 @@ async function fetchItems() {
     const data = await res.json();
 
     if (Array.isArray(data)) {
-      items = data.map(item => {
+      const procurementData = data.filter(item => item.pembelian !== "Pengaduan");
+      const complaintData = data.filter(item => item.pembelian === "Pengaduan");
+
+      items = procurementData.map(item => {
         return {
           id: parseInt(item.id) || 0,
           name: item.nama_barang || "",
@@ -403,8 +406,22 @@ async function fetchItems() {
           pembelian: item.pembelian || "Belum Dibeli"
         };
       });
+
+      complaints = complaintData.map(item => {
+        return {
+          id: parseInt(item.id) || 0,
+          barang_lokasi: item.nama_barang || "",
+          kategori: item.departemen || "",
+          keluhan: item.ulasan || "",
+          tanggal: item.tanggal || "",
+          status: item.persetujuan || "Baru",
+          pengaju: item.pengaju || "",
+          email_pengaju: item.wa_pengaju || ""
+        };
+      });
+
       // Save items to local cache
-      localStorage.setItem("spms_items_cache", JSON.stringify(data));
+      localStorage.setItem("spms_items_cache", JSON.stringify(procurementData));
     } else {
       if (data && data.message) {
         alert(`⚠️ ERROR DATABASE (Fetch): ${data.message}\n\nPastikan tabel 'pengajuan' sudah dibuat di database Supabase.`);
@@ -562,7 +579,8 @@ const PAGE_TITLES = {
   approval: "Persetujuan",
   reports: "Laporan Pengadaan",
   profile: "Profil Saya",
-  "send-report": "Laporan Pengaduan",
+  "send-report": "Kirim Pengaduan",
+  "status-pengaduan": "Status Pengaduan",
   "admin-history": "Riwayat Persetujuan",
   "admin-purchases": "Status Pembelian"
 };
@@ -574,7 +592,14 @@ function switchTab(tabId) {
   tabViews.forEach(view => {
     view.classList.toggle("active", view.id === `view-${tabId}`);
   });
-  if (headerTitle) headerTitle.textContent = PAGE_TITLES[tabId] || "SPMS";
+  if (headerTitle) {
+    if (tabId === "send-report") {
+      const session = JSON.parse(sessionStorage.getItem("spms_user") || "{}");
+      headerTitle.textContent = (session.role === "admin" || session.role === "manager" || session.role === "direktur") ? "Status Pengaduan" : "Kirim Pengaduan";
+    } else {
+      headerTitle.textContent = PAGE_TITLES[tabId] || "SPMS";
+    }
+  }
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
@@ -2986,27 +3011,15 @@ tableObserver.observe(document.body, { childList: true, subtree: true });
 let complaints = [];
 
 async function fetchComplaints() {
-  const tbody = document.getElementById("complaint-table-body");
-  if (!tbody) return; // Only fetch if dashboard elements exist (admin.html)
-
-  try {
-    const url = "https://voyryhdbvtspwffqbjat.supabase.co/rest/v1/pengaduan?order=id.desc";
-    const res = await fetch(url, { headers: API_HEADERS });
-    const data = await res.json();
-    if (Array.isArray(data)) {
-      complaints = data;
-      renderComplaints();
-    }
-  } catch (err) {
-    console.error("Gagal mengambil data pengaduan:", err);
-  }
+  renderComplaints();
 }
 
 function renderComplaints() {
   const tbodyAdmin = document.getElementById("complaint-table-body");
   const tbodyUser = document.getElementById("user-complaint-table-body");
+  const tbodyUserAll = document.getElementById("user-all-complaints-table-body");
   
-  if (!tbodyAdmin && !tbodyUser) return;
+  if (!tbodyAdmin && !tbodyUser && !tbodyUserAll) return;
 
   const session = JSON.parse(sessionStorage.getItem("spms_user") || "{}");
   const reporterName = session.name || "";
@@ -3081,7 +3094,7 @@ function renderComplaints() {
     }
   }
 
-  // Render User View
+  // Render User View (My Complaints History)
   if (tbodyUser) {
     const emptyStateUser = document.getElementById("user-complaint-empty-state");
     tbodyUser.innerHTML = "";
@@ -3116,15 +3129,82 @@ function renderComplaints() {
       });
     }
   }
+
+  // Render User View (Public Complaint Status Dashboard)
+  if (tbodyUserAll) {
+    const emptyStateUserAll = document.getElementById("user-all-complaints-empty-state");
+    tbodyUserAll.innerHTML = "";
+
+    if (complaints.length === 0) {
+      if (emptyStateUserAll) emptyStateUserAll.style.display = "block";
+      document.getElementById("user-status-count-new").textContent = "0";
+      document.getElementById("user-status-count-waiting").textContent = "0";
+      document.getElementById("user-status-count-process").textContent = "0";
+      document.getElementById("user-status-count-done").textContent = "0";
+    } else {
+      if (emptyStateUserAll) emptyStateUserAll.style.display = "none";
+
+      const countNew = complaints.filter(c => c.status === "Baru").length;
+      const countWaiting = complaints.filter(c => c.status === "Menunggu").length;
+      const countProcess = complaints.filter(c => c.status === "Diperbaiki").length;
+      const countDone = complaints.filter(c => c.status === "Selesai").length;
+
+      document.getElementById("user-status-count-new").textContent = countNew;
+      document.getElementById("user-status-count-waiting").textContent = countWaiting;
+      document.getElementById("user-status-count-process").textContent = countProcess;
+      document.getElementById("user-status-count-done").textContent = countDone;
+
+      const catElektronik = complaints.filter(c => c.kategori === "Elektronik").length;
+      const catKelas = complaints.filter(c => c.kategori === "Peralatan Kelas").length;
+      const catUmum = complaints.filter(c => c.kategori === "Fasilitas Umum").length;
+      const catLain = complaints.filter(c => c.kategori === "Lainnya").length;
+      const totalCat = complaints.length || 1;
+
+      document.getElementById("user-cat-count-elektronik").textContent = catElektronik;
+      document.getElementById("user-cat-count-kelas").textContent = catKelas;
+      document.getElementById("user-cat-count-umum").textContent = catUmum;
+      document.getElementById("user-cat-count-lain").textContent = catLain;
+
+      document.getElementById("user-cat-bar-elektronik").style.width = `${(catElektronik / totalCat) * 100}%`;
+      document.getElementById("user-cat-bar-kelas").style.width = `${(catKelas / totalCat) * 100}%`;
+      document.getElementById("user-cat-bar-umum").style.width = `${(catUmum / totalCat) * 100}%`;
+      document.getElementById("user-cat-bar-lain").style.width = `${(catLain / totalCat) * 100}%`;
+
+      const badgeStyles = {
+        "Baru": "background: #fef2f2; color: #ef4444; border: 1px solid #fee2e2; padding: 4px 10px; border-radius: 6px; font-weight: 700; font-size: 11px; display: inline-block;",
+        "Menunggu": "background: #fff7ed; color: #f97316; border: 1px solid #ffedd5; padding: 4px 10px; border-radius: 6px; font-weight: 700; font-size: 11px; display: inline-block;",
+        "Diperbaiki": "background: #eff6ff; color: #3b82f6; border: 1px solid #dbeafe; padding: 4px 10px; border-radius: 6px; font-weight: 700; font-size: 11px; display: inline-block;",
+        "Selesai": "background: #f0fdf4; color: #22c55e; border: 1px solid #dcfce7; padding: 4px 10px; border-radius: 6px; font-weight: 700; font-size: 11px; display: inline-block;"
+      };
+
+      complaints.forEach((c, idx) => {
+        const tr = document.createElement("tr");
+        const badgeStyle = badgeStyles[c.status] || badgeStyles["Baru"];
+
+        tr.innerHTML = `
+          <td>${idx + 1}</td>
+          <td>
+            <strong style="font-size:13px; color:var(--clr-text); display:block;">${c.barang_lokasi || '—'}</strong>
+            <span style="font-size:11px; color:var(--clr-muted); font-weight: 500;">Oleh: ${c.pengaju || '—'}</span>
+          </td>
+          <td style="font-weight:600; font-size: 13px; color: var(--clr-muted);">${c.kategori || '—'}</td>
+          <td style="font-size: 13px; color: var(--clr-text); font-weight: 500;">${c.keluhan || '—'}</td>
+          <td style="font-size:12px; color:var(--clr-muted); font-weight: 500;">${c.tanggal || '—'}</td>
+          <td><span style="${badgeStyle}">${c.status || 'Baru'}</span></td>
+        `;
+        tbodyUserAll.appendChild(tr);
+      });
+    }
+  }
 }
 
 window.updateComplaintStatus = async function(id, newStatus) {
   try {
-    const url = `https://voyryhdbvtspwffqbjat.supabase.co/rest/v1/pengaduan?id=eq.${id}`;
+    const url = `${SUPABASE_URL}?id=eq.${id}`;
     const res = await fetch(url, {
       method: "PATCH",
       headers: API_HEADERS,
-      body: JSON.stringify({ status: newStatus })
+      body: JSON.stringify({ persetujuan: newStatus })
     });
     
     if (res.ok) {
@@ -3145,7 +3225,7 @@ window.updateComplaintStatus = async function(id, newStatus) {
 window.deleteComplaint = async function(id) {
   if (!confirm("Apakah Anda yakin ingin menghapus laporan pengaduan ini?")) return;
   try {
-    const url = `https://voyryhdbvtspwffqbjat.supabase.co/rest/v1/pengaduan?id=eq.${id}`;
+    const url = `${SUPABASE_URL}?id=eq.${id}`;
     const res = await fetch(url, {
       method: "DELETE",
       headers: API_HEADERS
@@ -3188,20 +3268,23 @@ if (formSendReport) {
       const adminEmail = getRoleEmail("admin") || "fikriarsyad20041928@gmail.com";
       const today = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
 
-      // 1. Save to Supabase table
+      // 1. Save to Supabase table (unified in 'pengajuan' table with marker pembelian = 'Pengaduan')
       const newComplaint = {
         id: Date.now() + Math.floor(Math.random() * 1000),
-        barang_lokasi: subject,
-        keluhan: content,
+        nama_barang: subject,
+        departemen: category,
+        jumlah: 1,
+        harga: 0,
+        urgensi: "Normal",
+        ulasan: content,
         tanggal: today,
-        status: "Baru",
         pengaju: reporterName,
-        email_pengaju: reporterEmail,
-        kategori: category
+        wa_pengaju: reporterEmail,
+        persetujuan: "Baru",
+        pembelian: "Pengaduan"
       };
 
-      const supabaseUrl = "https://voyryhdbvtspwffqbjat.supabase.co/rest/v1/pengaduan";
-      const res = await fetch(supabaseUrl, {
+      const res = await fetch(SUPABASE_URL, {
         method: "POST",
         headers: API_HEADERS,
         body: JSON.stringify(newComplaint)
