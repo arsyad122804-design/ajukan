@@ -403,17 +403,61 @@ async function fetchItems() {
           pembelian: item.pembelian || "Belum Dibeli"
         };
       });
+      // Save items to local cache
+      localStorage.setItem("spms_items_cache", JSON.stringify(data));
     } else {
-      // Kalau response bukan array (error), tampil kosong
-      items = [];
+      loadCachedItems();
     }
   } catch (err) {
     console.error("Gagal mengambil data dari Supabase", err);
-    items = [];
+    loadCachedItems();
   }
 
   if (t) t.textContent = oldT;
   updateUI();
+}
+
+function loadCachedItems() {
+  try {
+    const cached = localStorage.getItem("spms_items_cache");
+    if (cached) {
+      const data = JSON.parse(cached);
+      if (Array.isArray(data)) {
+        items = data.map(item => {
+          return {
+            id: parseInt(item.id) || 0,
+            name: item.nama_barang || item.name || "",
+            dept: item.departemen || item.dept || "",
+            qty: parseInt(item.jumlah) || parseInt(item.qty) || 0,
+            price: parseFloat(item.harga) || parseFloat(item.price) || 0,
+            urgency: item.urgensi || item.urgency || "Normal",
+            ulasan: item.ulasan || "",
+            minStock: parseInt(item.min_stock) || parseInt(item.minStock) || 5,
+            tanggal: item.tanggal || "",
+            pengaju: item.pengaju || "",
+            wa: item.wa_pengaju || item.wa || "",
+            signature: item.ttd_pengaju || item.signature || "",
+            approval: item.persetujuan || item.approval || "Pending",
+            adminSignature: (() => {
+              const sig = item.ttd_admin || item.adminSignature;
+              if (!sig) return {};
+              if (typeof sig === "object") return sig;
+              try {
+                return JSON.parse(sig);
+              } catch (e) {
+                if (typeof sig === "string" && sig.startsWith("data:")) return { direktur: sig };
+                return {};
+              }
+            })(),
+            pembelian: item.pembelian || "Belum Dibeli"
+          };
+        });
+        console.log("Fallback: Loaded items successfully from local cache.");
+      }
+    }
+  } catch (e) {
+    console.error("Error loading cached items:", e);
+  }
 }
 
 window.clearAllDatabaseData = async function() {
