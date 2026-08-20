@@ -49,7 +49,7 @@ const FONNTE_TOKEN = "Gp6kkhv5BtzLh49iw45o";
 // ---- EmailJS Configuration (Metode 1) ----
 const EMAILJS_SERVICE_ID = "service_pj21c0q";
 const EMAILJS_TEMPLATE_ID = "template_hjktqkq";
-const EMAILJS_PUBLIC_KEY = "ClnhHaoRzugLo_XSi";
+const EMAILJS_PUBLIC_KEY = "CInhHaoRzugLo_XSi";
 
 function getRoleEmail(targetRole) {
   try {
