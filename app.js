@@ -3,8 +3,8 @@
 // =====================================================
 
 // ---- State ----
-const SUPABASE_URL = "https://srwnsoyiolztjijfifaq.supabase.co/rest/v1/pengajuan";
-const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNyd25zb3lpb2x6dGppamZpZmFxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk0NDYzNTIsImV4cCI6MjA5NTAyMjM1Mn0.RPidnJYg0L2cHw3NppxASc81kqleytxVWtorSmAiFjA";
+const SUPABASE_URL = "YOUR_SUPABASE_URL/rest/v1/pengajuan";
+const SUPABASE_KEY = "YOUR_SUPABASE_KEY";
 const API_HEADERS = {
   "Content-Type": "application/json",
   "apikey": SUPABASE_KEY,
