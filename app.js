@@ -3003,83 +3003,119 @@ async function fetchComplaints() {
 }
 
 function renderComplaints() {
-  const tbody = document.getElementById("complaint-table-body");
-  const emptyState = document.getElementById("complaint-empty-state");
-  if (!tbody) return;
+  const tbodyAdmin = document.getElementById("complaint-table-body");
+  const tbodyUser = document.getElementById("user-complaint-table-body");
+  
+  if (!tbodyAdmin && !tbodyUser) return;
 
-  tbody.innerHTML = "";
+  const session = JSON.parse(sessionStorage.getItem("spms_user") || "{}");
+  const reporterName = session.name || "";
 
-  if (complaints.length === 0) {
-    if (emptyState) emptyState.style.display = "block";
-    
-    // Reset stats
-    document.getElementById("complaint-count-new").textContent = "0";
-    document.getElementById("complaint-count-waiting").textContent = "0";
-    document.getElementById("complaint-count-process").textContent = "0";
-    document.getElementById("complaint-count-done").textContent = "0";
-    return;
+  // Render Admin View
+  if (tbodyAdmin) {
+    const emptyState = document.getElementById("complaint-empty-state");
+    tbodyAdmin.innerHTML = "";
+
+    if (complaints.length === 0) {
+      if (emptyState) emptyState.style.display = "block";
+      document.getElementById("complaint-count-new").textContent = "0";
+      document.getElementById("complaint-count-waiting").textContent = "0";
+      document.getElementById("complaint-count-process").textContent = "0";
+      document.getElementById("complaint-count-done").textContent = "0";
+    } else {
+      if (emptyState) emptyState.style.display = "none";
+
+      const countNew = complaints.filter(c => c.status === "Baru").length;
+      const countWaiting = complaints.filter(c => c.status === "Menunggu").length;
+      const countProcess = complaints.filter(c => c.status === "Diperbaiki").length;
+      const countDone = complaints.filter(c => c.status === "Selesai").length;
+
+      document.getElementById("complaint-count-new").textContent = countNew;
+      document.getElementById("complaint-count-waiting").textContent = countWaiting;
+      document.getElementById("complaint-count-process").textContent = countProcess;
+      document.getElementById("complaint-count-done").textContent = countDone;
+
+      const catElektronik = complaints.filter(c => c.kategori === "Elektronik").length;
+      const catKelas = complaints.filter(c => c.kategori === "Peralatan Kelas").length;
+      const catUmum = complaints.filter(c => c.kategori === "Fasilitas Umum").length;
+      const catLain = complaints.filter(c => c.kategori === "Lainnya").length;
+      const totalCat = complaints.length || 1;
+
+      document.getElementById("cat-count-elektronik").textContent = catElektronik;
+      document.getElementById("cat-count-kelas").textContent = catKelas;
+      document.getElementById("cat-count-umum").textContent = catUmum;
+      document.getElementById("cat-count-lain").textContent = catLain;
+
+      document.getElementById("cat-bar-elektronik").style.width = `${(catElektronik / totalCat) * 100}%`;
+      document.getElementById("cat-bar-kelas").style.width = `${(catKelas / totalCat) * 100}%`;
+      document.getElementById("cat-bar-umum").style.width = `${(catUmum / totalCat) * 100}%`;
+      document.getElementById("cat-bar-lain").style.width = `${(catLain / totalCat) * 100}%`;
+
+      complaints.forEach((c, idx) => {
+        const tr = document.createElement("tr");
+        const statusOpts = ["Baru", "Menunggu", "Diperbaiki", "Selesai"];
+        const statusSelect = `
+          <select onchange="updateComplaintStatus(${c.id}, this.value)" style="padding: 6px 10px; border-radius: 6px; border: 1px solid var(--clr-border); font-size: 12px; font-weight: 600; background: var(--clr-card); color: var(--clr-text); outline: none; cursor: pointer;">
+            ${statusOpts.map(opt => `<option value="${opt}" ${c.status === opt ? 'selected' : ''}>${opt}</option>`).join('')}
+          </select>
+        `;
+
+        tr.innerHTML = `
+          <td>${idx + 1}</td>
+          <td>
+            <strong style="font-size:13px; color:var(--clr-text); display:block;">${c.barang_lokasi || '—'}</strong>
+            <span style="font-size:11px; color:var(--clr-muted); font-weight: 500;">Oleh: ${c.pengaju || '—'}</span>
+          </td>
+          <td style="font-weight:600; font-size: 13px; color: var(--clr-muted);">${c.kategori || '—'}</td>
+          <td style="font-size: 13px; color: var(--clr-text); font-weight: 500;">${c.keluhan || '—'}</td>
+          <td style="font-size:12px; color:var(--clr-muted); font-weight: 500;">${c.tanggal || '—'}</td>
+          <td>${statusSelect}</td>
+          <td>
+            <button onclick="deleteComplaint(${c.id})" class="btn-remove-item" style="padding:6px; background: transparent; border: none; color: #ef4444; cursor: pointer; display: flex; align-items: center; justify-content: center; border-radius: 6px; transition: background 0.2s;" title="Hapus Pengaduan">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px; height:15px;"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            </button>
+          </td>
+        `;
+        tbodyAdmin.appendChild(tr);
+      });
+    }
   }
 
-  if (emptyState) emptyState.style.display = "none";
+  // Render User View
+  if (tbodyUser) {
+    const emptyStateUser = document.getElementById("user-complaint-empty-state");
+    tbodyUser.innerHTML = "";
 
-  // 1. Calculate Status Counts
-  const countNew = complaints.filter(c => c.status === "Baru").length;
-  const countWaiting = complaints.filter(c => c.status === "Menunggu").length;
-  const countProcess = complaints.filter(c => c.status === "Diperbaiki").length;
-  const countDone = complaints.filter(c => c.status === "Selesai").length;
+    const userComplaints = complaints.filter(c => c.pengaju === reporterName);
 
-  document.getElementById("complaint-count-new").textContent = countNew;
-  document.getElementById("complaint-count-waiting").textContent = countWaiting;
-  document.getElementById("complaint-count-process").textContent = countProcess;
-  document.getElementById("complaint-count-done").textContent = countDone;
+    if (userComplaints.length === 0) {
+      if (emptyStateUser) emptyStateUser.style.display = "block";
+    } else {
+      if (emptyStateUser) emptyStateUser.style.display = "none";
 
-  // 2. Calculate Category Stats
-  const catElektronik = complaints.filter(c => c.kategori === "Elektronik").length;
-  const catKelas = complaints.filter(c => c.kategori === "Peralatan Kelas").length;
-  const catUmum = complaints.filter(c => c.kategori === "Fasilitas Umum").length;
-  const catLain = complaints.filter(c => c.kategori === "Lainnya").length;
-  const totalCat = complaints.length || 1;
+      const badgeStyles = {
+        "Baru": "background: #fef2f2; color: #ef4444; border: 1px solid #fee2e2; padding: 4px 10px; border-radius: 6px; font-weight: 700; font-size: 11px; display: inline-block;",
+        "Menunggu": "background: #fff7ed; color: #f97316; border: 1px solid #ffedd5; padding: 4px 10px; border-radius: 6px; font-weight: 700; font-size: 11px; display: inline-block;",
+        "Diperbaiki": "background: #eff6ff; color: #3b82f6; border: 1px solid #dbeafe; padding: 4px 10px; border-radius: 6px; font-weight: 700; font-size: 11px; display: inline-block;",
+        "Selesai": "background: #f0fdf4; color: #22c55e; border: 1px solid #dcfce7; padding: 4px 10px; border-radius: 6px; font-weight: 700; font-size: 11px; display: inline-block;"
+      };
 
-  document.getElementById("cat-count-elektronik").textContent = catElektronik;
-  document.getElementById("cat-count-kelas").textContent = catKelas;
-  document.getElementById("cat-count-umum").textContent = catUmum;
-  document.getElementById("cat-count-lain").textContent = catLain;
+      userComplaints.forEach((c, idx) => {
+        const tr = document.createElement("tr");
+        const badgeStyle = badgeStyles[c.status] || badgeStyles["Baru"];
 
-  document.getElementById("cat-bar-elektronik").style.width = `${(catElektronik / totalCat) * 100}%`;
-  document.getElementById("cat-bar-kelas").style.width = `${(catKelas / totalCat) * 100}%`;
-  document.getElementById("cat-bar-umum").style.width = `${(catUmum / totalCat) * 100}%`;
-  document.getElementById("cat-bar-lain").style.width = `${(catLain / totalCat) * 100}%`;
-
-  // 3. Render Table Rows
-  complaints.forEach((c, idx) => {
-    const tr = document.createElement("tr");
-    
-    // Status select rendering
-    const statusOpts = ["Baru", "Menunggu", "Diperbaiki", "Selesai"];
-    const statusSelect = `
-      <select onchange="updateComplaintStatus(${c.id}, this.value)" style="padding: 6px 10px; border-radius: 6px; border: 1px solid var(--clr-border); font-size: 12px; font-weight: 600; background: var(--clr-card); color: var(--clr-text); outline: none; cursor: pointer;">
-        ${statusOpts.map(opt => `<option value="${opt}" ${c.status === opt ? 'selected' : ''}>${opt}</option>`).join('')}
-      </select>
-    `;
-
-    tr.innerHTML = `
-      <td>${idx + 1}</td>
-      <td>
-        <strong style="font-size:13px; color:var(--clr-text); display:block;">${c.barang_lokasi || '—'}</strong>
-        <span style="font-size:11px; color:var(--clr-muted); font-weight: 500;">Oleh: ${c.pengaju || '—'}</span>
-      </td>
-      <td style="font-weight:600; font-size: 13px; color: var(--clr-muted);">${c.kategori || '—'}</td>
-      <td style="font-size: 13px; color: var(--clr-text); font-weight: 500;">${c.keluhan || '—'}</td>
-      <td style="font-size:12px; color:var(--clr-muted); font-weight: 500;">${c.tanggal || '—'}</td>
-      <td>${statusSelect}</td>
-      <td>
-        <button onclick="deleteComplaint(${c.id})" class="btn-remove-item" style="padding:6px; background: transparent; border: none; color: #ef4444; cursor: pointer; display: flex; align-items: center; justify-content: center; border-radius: 6px; transition: background 0.2s;" title="Hapus Pengaduan">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px; height:15px;"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-        </button>
-      </td>
-    `;
-    tbody.appendChild(tr);
-  });
+        tr.innerHTML = `
+          <td>${idx + 1}</td>
+          <td><strong style="font-size:13px; color:var(--clr-text);">${c.barang_lokasi || '—'}</strong></td>
+          <td style="font-weight:600; font-size: 13px; color: var(--clr-muted);">${c.kategori || '—'}</td>
+          <td style="font-size: 13px; color: var(--clr-text); font-weight: 500;">${c.keluhan || '—'}</td>
+          <td style="font-size:12px; color:var(--clr-muted); font-weight: 500;">${c.tanggal || '—'}</td>
+          <td><span style="${badgeStyle}">${c.status || 'Baru'}</span></td>
+        `;
+        tbodyUser.appendChild(tr);
+      });
+    }
+  }
 }
 
 window.updateComplaintStatus = async function(id, newStatus) {
