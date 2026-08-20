@@ -113,11 +113,13 @@ async function sendEmailDirect(toEmail, subject, message, extraParams = {}) {
     } else {
       const errText = await res.text();
       console.warn("EmailJS API response error:", errText);
+      alert(`⚠️ ERROR EMAILJS: ${errText}\n\nPastikan Service ID, Template ID, dan Public Key di app.js sudah sesuai.`);
       showToast(`❌ Gagal mengirim email ke ${toEmail}`);
       return false;
     }
   } catch (err) {
     console.warn("EmailJS network error:", err);
+    alert(`⚠️ ERROR JARINGAN EMAIL: ${err.message}`);
     showToast(`❌ Koneksi email bermasalah`);
     return false;
   }
