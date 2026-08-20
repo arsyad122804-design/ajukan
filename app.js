@@ -69,9 +69,9 @@ function getRoleEmail(targetRole) {
   } catch (e) {}
   
   // Fallback default emails if not configured in profile yet
-  if (targetRole === "admin") return "admin@example.com";
-  if (targetRole === "direktur") return "direktur@example.com";
-  if (targetRole === "manager") return "manager@example.com";
+  if (targetRole === "admin") return "fikriarsyad20041928@gmail.com";
+  if (targetRole === "direktur") return "fikriarsyad20041928@gmail.com";
+  if (targetRole === "manager") return "fikriarsyad20041928@gmail.com";
   return "";
 }
 
