@@ -75,7 +75,7 @@ function getRoleEmail(targetRole) {
   return "";
 }
 
-async function sendEmailDirect(toEmail, subject, message, extraParams = {}) {
+async function sendEmailDirect(toEmail, subject, message, extraParams = {}, customTemplateId = null) {
   if (!toEmail) {
     console.warn("Target email not provided for notification.");
     return false;
@@ -86,6 +86,7 @@ async function sendEmailDirect(toEmail, subject, message, extraParams = {}) {
     return false;
   }
 
+  const templateId = customTemplateId || EMAILJS_TEMPLATE_ID;
   showToast(`📧 Mengirim email ke ${toEmail}...`);
 
   try {
@@ -96,7 +97,7 @@ async function sendEmailDirect(toEmail, subject, message, extraParams = {}) {
       },
       body: JSON.stringify({
         service_id: EMAILJS_SERVICE_ID,
-        template_id: EMAILJS_TEMPLATE_ID,
+        template_id: templateId,
         user_id: EMAILJS_PUBLIC_KEY,
         template_params: {
           to_email: toEmail,
@@ -3288,6 +3289,16 @@ function renderComplaints() {
   }
 }
 
+function formatComplaintStatus(status) {
+  const mapping = {
+    "Baru": "Pengaduan Baru (Belum ditindaklanjuti)",
+    "Menunggu": "Menunggu Perbaikan (Sedang dijadwalkan)",
+    "Diperbaiki": "Sedang Diperbaiki (Dalam proses)",
+    "Selesai": "Selesai Diperbaiki (Telah diselesaikan)"
+  };
+  return mapping[status] || status;
+}
+
 window.updateComplaintStatus = async function(id, newStatus) {
   try {
     const url = `${SUPABASE_URL}?id=eq.${id}`;
@@ -3300,7 +3311,25 @@ window.updateComplaintStatus = async function(id, newStatus) {
     if (res.ok) {
       showToast(`✅ Status pengaduan berhasil diubah ke: ${newStatus}`);
       const comp = complaints.find(c => c.id == id);
-      if (comp) comp.status = newStatus;
+      if (comp) {
+        comp.status = newStatus;
+        
+        // Kirim notifikasi status pengaduan ke email pengaju
+        if (comp.email_pengaju && comp.email_pengaju.includes("@")) {
+          const formattedStatus = formatComplaintStatus(newStatus);
+          const userSubject = `Update Status Pengaduan: ${comp.barang_lokasi}`;
+          const userMsg = `Assalamu’alaikum wr. wb.,\n\nLaporan pengaduan fasilitas Anda telah diperbarui oleh Admin:\n\n📦 *Fasilitas/Lokasi:* ${comp.barang_lokasi}\n🏛️ *Kategori:* ${comp.kategori}\n💬 *Keluhan:* ${comp.keluhan}\n\nStatus Terbaru: *✨ ${formattedStatus.toUpperCase()} ✨*\n\nJazakumullahu khairan atas perhatiannya. 🙏\n\n_Sistem Pengadaan SPMS Hibatullah IIBS_`;
+          
+          const userParams = {
+            item_name: comp.barang_lokasi,
+            item_dept: comp.kategori,
+            item_qty: formattedStatus,
+            item_pengaju: comp.pengaju || "Pengguna"
+          };
+          
+          sendEmailDirect(comp.email_pengaju, userSubject, userMsg, userParams, "template_x98qa5v");
+        }
+      }
       renderComplaints();
     } else {
       const err = await res.json();
@@ -3405,7 +3434,22 @@ Jazakumullahu khairan.`;
         item_pengaju: reporterName
       };
 
-      await sendEmailDirect(adminEmail, `[Pengaduan Baru] ${subject}`, emailMessage, extraParams);
+      await sendEmailDirect(adminEmail, `[Pengaduan Baru] ${subject}`, emailMessage, extraParams, "template_x98qa5v");
+      
+      // Kirim email konfirmasi ke pelapor
+      if (reporterEmail && reporterEmail.includes("@")) {
+        const userSubject = `Laporan Pengaduan Diterima: ${subject}`;
+        const userMsg = `Assalamu’alaikum wr. wb.,\n\nLaporan pengaduan fasilitas Anda telah kami terima di sistem:\n\n📦 *Fasilitas/Lokasi:* ${subject}\n🏛️ *Kategori:* ${category}\n💬 *Keluhan:* ${content}\n\nStatus: *${formatComplaintStatus("Baru")}*\n\nTerima kasih atas laporan Anda. Jazakumullahu khairan. 🙏\n\n_Sistem Pengadaan SPMS Hibatullah IIBS_`;
+        
+        const userParams = {
+          item_name: subject,
+          item_dept: category,
+          item_qty: formatComplaintStatus("Baru"),
+          item_pengaju: reporterName
+        };
+        
+        sendEmailDirect(reporterEmail, userSubject, userMsg, userParams, "template_x98qa5v");
+      }
       
       showToast("✅ Laporan pengaduan Anda berhasil terkirim ke Admin!");
       formSendReport.reset();
