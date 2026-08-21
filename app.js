@@ -102,6 +102,9 @@ async function sendEmailDirect(toEmail, subject, message, extraParams = {}) {
           to_email: toEmail,
           subject: subject,
           message: message.replace(/\n/g, "<br>"), // Replace newlines with HTML line breaks if email is HTML
+          redirect_url: "https://ajukan.vercel.app/login.html",
+          link: "https://ajukan.vercel.app/login.html",
+          url: "https://ajukan.vercel.app/login.html",
           ...extraParams
         }
       })
@@ -332,64 +335,65 @@ window.sendWaNotification = async function(id, action) {
 
   const actionClean = (action || item.approval || "Pending").trim();
 
+  const itemExtraParams = {
+    item_name: item.name || "",
+    item_dept: item.dept || "",
+    item_qty: item.qty || "",
+    item_pengaju: item.pengaju || "Pengajuan"
+  };
+
   // STAGE 1: Pengajuan Submits Item -> WA/Email sent automatically to Direktur & Manager
   if (actionClean === "Pengajuan Baru") {
     const msg = `Assalamu’alaikum Ustadz, terdapat informasi terbaru terkait kegiatan dan administrasi yang perlu diperiksa. Mohon berkenan untuk mengeceknya melalui sistem.\n\n📦 *Barang:* ${item.name}\n🏛️ *Unit:* ${item.dept}\n🔢 *Jumlah:* ${item.qty} Pcs\n👤 *Pengaju:* ${item.pengaju || "Pengajuan"}\n\nJazakumullahu khairan atas perhatian dan waktunya. 🙏`;
     if (mgrPhone) sendWaDirect(mgrPhone, msg);
     if (dirPhone) sendWaDirect(dirPhone, msg);
     
-    const extraParams = {
-      item_name: item.name,
-      item_dept: item.dept,
-      item_qty: item.qty,
-      item_pengaju: item.pengaju || "Pengajuan"
-    };
-    if (mgrEmail) sendEmailDirect(mgrEmail, "Pengajuan Barang Baru", msg, extraParams);
-    if (dirEmail) sendEmailDirect(dirEmail, "Pengajuan Barang Baru", msg, extraParams);
+    if (mgrEmail) sendEmailDirect(mgrEmail, "Pengajuan Barang Baru", msg, itemExtraParams);
+    if (dirEmail) sendEmailDirect(dirEmail, "Pengajuan Barang Baru", msg, itemExtraParams);
   } 
   // STAGE 2A: Manager Clicks Setuju -> WA/Email sent to Direktur
   else if (actionClean === "Disetujui Manager") {
     const msgDir = `Assalamu'alaikum wr. wb.\n\nYth. Direktur,\n\nManager telah menyetujui pengajuan barang:\n📦 *Barang:* ${item.name}\n🏛️ *Unit:* ${item.dept}\n🔢 *Jumlah:* ${item.qty} Pcs\n👤 *Pengaju:* ${item.pengaju || "Pengajuan"}\n\nStatus: *⏳ MENUNGGU PERSETUJUAN DIREKTUR*\nMohon segera login untuk memberikan tanda tangan persetujuan final.\n\nTerima kasih.\n_Sistem Pengadaan SPMS Hibatullah IIBS_`;
     if (dirPhone) sendWaDirect(dirPhone, msgDir);
-    if (dirEmail) sendEmailDirect(dirEmail, "Menunggu Persetujuan Direktur", msgDir);
+    if (dirEmail) sendEmailDirect(dirEmail, "Menunggu Persetujuan Direktur", msgDir, itemExtraParams);
     
     // Also notify Pengaju that Manager approved
     const msgInv = `Assalamu'alaikum wr. wb.\n\nYth. ${item.pengaju || "Pengajuan"},\n\nPengajuan barang Anda:\n📦 *Barang:* ${item.name}\n\nStatus Terbaru: *Approved by Manager (⏳ Menunggu Direktur)*\n\nTerima kasih.\n_Sistem Pengadaan SPMS Hibatullah IIBS_`;
     if (itemWaNumber && itemWaNumber !== "—") sendWaDirect(itemWaNumber, msgInv);
-    if (itemEmailAddress) sendEmailDirect(itemEmailAddress, "Update Pengajuan Barang", msgInv);
+    if (itemEmailAddress) sendEmailDirect(itemEmailAddress, "Update Pengajuan Barang", msgInv, itemExtraParams);
   }
   // STAGE 2B: Direktur Clicks Setuju -> WA/Email sent to Manager
   else if (actionClean === "Disetujui Direktur") {
     const msgMgr = `Assalamu'alaikum wr. wb.\n\nYth. Manager,\n\nDirektur telah menyetujui pengajuan barang:\n📦 *Barang:* ${item.name}\n🏛️ *Unit:* ${item.dept}\n🔢 *Jumlah:* ${item.qty} Pcs\n👤 *Pengaju:* ${item.pengaju || "Pengajuan"}\n\nStatus: *⏳ MENUNGGU PERSETUJUAN MANAGER*\nMohon segera login untuk memberikan tanda tangan persetujuan final.\n\nTerima kasih.\n_Sistem Pengadaan SPMS Hibatullah IIBS_`;
     if (mgrPhone) sendWaDirect(mgrPhone, msgMgr);
-    if (mgrEmail) sendEmailDirect(mgrEmail, "Menunggu Persetujuan Manager", msgMgr);
+    if (mgrEmail) sendEmailDirect(mgrEmail, "Menunggu Persetujuan Manager", msgMgr, itemExtraParams);
     
     // Also notify Pengaju that Direktur approved
     const msgInv = `Assalamu'alaikum wr. wb.\n\nYth. ${item.pengaju || "Pengajuan"},\n\nPengajuan barang Anda:\n📦 *Barang:* ${item.name}\n\nStatus Terbaru: *Approved by Direktur (⏳ Menunggu Manager)*\n\nTerima kasih.\n_Sistem Pengadaan SPMS Hibatullah IIBS_`;
     if (itemWaNumber && itemWaNumber !== "—") sendWaDirect(itemWaNumber, msgInv);
-    if (itemEmailAddress) sendEmailDirect(itemEmailAddress, "Update Pengajuan Barang", msgInv);
+    if (itemEmailAddress) sendEmailDirect(itemEmailAddress, "Update Pengajuan Barang", msgInv, itemExtraParams);
   }
   // STAGE 3: Final Approval -> WA/Email sent to Admin & Pengaju
   else if (actionClean === "Disetujui") {
     const msgAdm = `Assalamu'alaikum wr. wb.\n\nYth. Admin,\n\nPengadaan Barang Telah Disetujui (Oleh Manager & Direktur) & Siap Dibeli:\n📦 *Barang:* ${item.name}\n🏛️ *Unit:* ${item.dept}\n🔢 *Jumlah:* ${item.qty} Pcs\n👤 *Pengaju:* ${item.pengaju || "Pengajuan"}\n\nStatus: *✅ DISETUJUI FINAL (Siap Dibeli)*\nSilakan lakukan proses pembelian.\n\nTerima kasih.\n_Sistem Pengadaan SPMS Hibatullah IIBS_`;
     if (admPhone) sendWaDirect(admPhone, msgAdm);
-    if (admEmail) sendEmailDirect(admEmail, "Pengadaan Barang Disetujui Final", msgAdm);
+    if (admEmail) sendEmailDirect(admEmail, "Pengadaan Barang Disetujui Final", msgAdm, itemExtraParams);
     
     const msgInv = `Assalamu'alaikum wr. wb.\n\nYth. ${item.pengaju || "Pengajuan"},\n\nPengajuan barang Anda:\n📦 *Barang:* ${item.name}\n\nStatus Terbaru: *✅ DISETUJUI FINAL (Siap Dibeli)*\n\nTerima kasih.\n_Sistem Pengadaan SPMS Hibatullah IIBS_`;
     if (itemWaNumber && itemWaNumber !== "—") sendWaDirect(itemWaNumber, msgInv);
-    if (itemEmailAddress) sendEmailDirect(itemEmailAddress, "Pengajuan Barang Disetujui Final", msgInv);
+    if (itemEmailAddress) sendEmailDirect(itemEmailAddress, "Pengajuan Barang Disetujui Final", msgInv, itemExtraParams);
   } 
   // STAGE 3: Item Rejected -> WA/Email sent to Pengaju
   else if (actionClean === "Ditolak") {
     const msgInv = `Assalamu'alaikum wr. wb.\n\nYth. ${item.pengaju || "Pengajuan"},\n\nPengajuan barang Anda:\n📦 *Barang:* ${item.name}\n\nStatus Terbaru: *❌ DITOLAK MANAJEMEN*\n\nTerima kasih.\n_Sistem Pengadaan SPMS Hibatullah IIBS_`;
     if (itemWaNumber && itemWaNumber !== "—") sendWaDirect(itemWaNumber, msgInv);
-    if (itemEmailAddress) sendEmailDirect(itemEmailAddress, "Pengajuan Barang Ditolak", msgInv);
+    if (itemEmailAddress) sendEmailDirect(itemEmailAddress, "Pengajuan Barang Ditolak", msgInv, itemExtraParams);
   } 
   // STAGE 4: Admin Buys Item -> WA/Email sent to Pengaju
   else if (actionClean.includes("DIBELI") || item.pembelian === "Sudah Dibeli") {
     const msgInv = `Assalamu'alaikum wr. wb.\n\nYth. ${item.pengaju || "Pengajuan"},\n\nPengajuan barang Anda:\n📦 *Barang:* ${item.name}\n🔢 *Jumlah:* ${item.qty} Pcs\n\nStatus Terbaru: *🛒 SUDAH DIBELI ADMIN 🎉*\nBarang telah selesai dibelikan dan siap digunakan.\n\nTerima kasih.\n_Sistem Pengadaan SPMS Hibatullah IIBS_`;
     if (itemWaNumber && itemWaNumber !== "—") sendWaDirect(itemWaNumber, msgInv);
-    if (itemEmailAddress) sendEmailDirect(itemEmailAddress, "Pengajuan Barang Selesai Dibeli", msgInv);
+    if (itemEmailAddress) sendEmailDirect(itemEmailAddress, "Pengajuan Barang Selesai Dibeli", msgInv, itemExtraParams);
   }
 };
 
