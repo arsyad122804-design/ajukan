@@ -806,10 +806,10 @@ function renderAdminPurchasesTable() {
       <td><span class="dept-badge ${i.dept === 'SMK' ? 'dept-badge--blue' : i.dept === 'SMP' ? 'dept-badge--orange' : 'dept-badge--green'}">${i.dept}</span></td>
       <td style="font-weight:600;">${i.qty} Pcs</td>
       <td style="font-weight:600;">${formatRupiah(i.qty * i.price)}</td>
-      <td>
-        <span style="font-weight:600; color:var(--clr-text); display:block;">${i.pengaju || '—'}</span>
+      <td style="word-break:break-all; overflow:hidden;">
+        <span style="font-weight:600; color:var(--clr-text); display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${i.pengaju || '—'}</span>
         ${resolveEmailDisplay(i) !== '—' ? `
-        <a href="mailto:${resolveEmailDisplay(i)}" style="font-size:11px; font-weight:600; color:#3b82f6; text-decoration:none; display:inline-flex; align-items:center; gap:3px;" title="Kirim email">
+        <a href="mailto:${resolveEmailDisplay(i)}" style="font-size:11px; font-weight:600; color:#3b82f6; text-decoration:none; display:inline-flex; align-items:center; gap:3px; word-break:break-all;" title="Kirim email">
           ✉️ ${resolveEmailDisplay(i)}
         </a>
         ` : `<span style="font-size:11px; font-weight:500; color:var(--clr-muted, #94a3b8); display:inline-flex; align-items:center; gap:3px;">✉️ —</span>`}
@@ -1399,10 +1399,10 @@ function renderTable() {
       <td style="font-weight:700;">${item.qty} Pcs</td>
       <td style="font-weight:500;">Rp ${item.price.toLocaleString("id-ID")}</td>
       <td style="font-weight:700;">Rp ${total.toLocaleString("id-ID")}</td>
-      <td>
-        <span style="font-weight:600; color:var(--clr-text); display:block;">${item.pengaju || '—'}</span>
+      <td style="word-break:break-all; overflow:hidden;">
+        <span style="font-weight:600; color:var(--clr-text); display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${item.pengaju || '—'}</span>
         ${resolveEmailDisplay(item) !== '—' ? `
-        <a href="mailto:${resolveEmailDisplay(item)}" style="font-size:11px; font-weight:600; color:#3b82f6; text-decoration:none; display:inline-flex; align-items:center; gap:3px;" title="Kirim email">
+        <a href="mailto:${resolveEmailDisplay(item)}" style="font-size:11px; font-weight:600; color:#3b82f6; text-decoration:none; display:inline-flex; align-items:center; gap:3px; word-break:break-all;" title="Kirim email">
           ✉️ ${resolveEmailDisplay(item)}
         </a>
         ` : `<span style="font-size:11px; font-weight:500; color:var(--clr-muted, #94a3b8); display:inline-flex; align-items:center; gap:3px;">✉️ —</span>`}
@@ -1500,10 +1500,10 @@ function renderSubmissionTable() {
       <td><span class="dept-badge ${dept.cls}">${dept.label}</span></td>
       <td style="font-weight:600;">${item.qty} Pcs</td>
       <td style="font-weight:700;">Rp ${total.toLocaleString("id-ID")}</td>
-      <td>
-        <span style="font-weight:600; color:var(--clr-text); display:block;">${pengaju}</span>
+      <td style="word-break:break-all; overflow:hidden;">
+        <span style="font-weight:600; color:var(--clr-text); display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${pengaju}</span>
         ${resolveEmailDisplay(item) !== '—' ? `
-        <a href="mailto:${resolveEmailDisplay(item)}" style="font-size:11px; font-weight:600; color:#3b82f6; text-decoration:none; display:inline-flex; align-items:center; gap:3px;" title="Kirim email">
+        <a href="mailto:${resolveEmailDisplay(item)}" style="font-size:11px; font-weight:600; color:#3b82f6; text-decoration:none; display:inline-flex; align-items:center; gap:3px; word-break:break-all;" title="Kirim email">
           ✉️ ${resolveEmailDisplay(item)}
         </a>
         ` : `<span style="font-size:11px; font-weight:500; color:var(--clr-muted, #94a3b8); display:inline-flex; align-items:center; gap:3px;">✉️ —</span>`}
@@ -1520,8 +1520,8 @@ function renderSubmissionTable() {
           </div>
         </div>
       </td>
-      <td>
-        <div class="approval-actions" style="display:flex; gap:6px; align-items:center;">
+      <td style="text-align:center;">
+        <div class="approval-actions" style="display:flex; gap:6px; align-items:center; justify-content:center;">
           ${(() => {
             if (approval === "Ditolak" || approval === "Sudah Dibeli" || item.pembelian === "Sudah Dibeli") return ``;
 
