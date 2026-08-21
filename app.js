@@ -783,7 +783,8 @@ function renderAdminHistoryTable() {
       <td>
         <div style="display:flex; gap:8px; align-items:center;">
           ${i.signature ? `<img src="${i.signature}" style="height:30px; width:auto; background:white; border-radius:4px; border:1px solid #e2e8f0;" title="Ttd Pengaju">` : '<span style="color:#94a3b8;font-size:11px;">-</span>'}
-          ${i.adminSignature ? `<img src="${i.adminSignature}" style="height:30px; width:auto; background:white; border-radius:4px; border:1px solid #e2e8f0;" title="Ttd Direktur">` : '<span style="color:#94a3b8;font-size:11px;">-</span>'}
+          ${i.adminSignature && i.adminSignature.manager ? `<img src="${i.adminSignature.manager}" style="height:30px; width:auto; background:white; border-radius:4px; border:1px solid #e2e8f0;" title="Ttd Manager">` : ''}
+          ${i.adminSignature && i.adminSignature.direktur ? `<img src="${i.adminSignature.direktur}" style="height:30px; width:auto; background:white; border-radius:4px; border:1px solid #e2e8f0;" title="Ttd Direktur">` : ''}
         </div>
       </td>
       <td>

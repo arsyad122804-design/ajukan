@@ -1,4 +1,4 @@
-const CACHE_NAME = 'spms-cache-v19';
+const CACHE_NAME = 'spms-cache-v20';
 const urlsToCache = [
   './',
   './login.html',
