@@ -529,7 +529,7 @@ function loadCachedItems() {
 }
 
 window.clearAllDatabaseData = async function() {
-  if (!confirm("⚠️ Apakah Anda yakin ingin MENGHAPUS SELURUH DATA pengajuan barang di database? Data yang dihapus tidak dapat dikembalikan.")) {
+  if (!confirm("⚠️ Apakah Anda yakin ingin MENGHAPUS SELURUH DATA pengajuan barang di database? (Data Pengaduan Fasilitas tidak akan ikut terhapus).")) {
     return;
   }
   localStorage.removeItem("spms_items");
@@ -538,15 +538,15 @@ window.clearAllDatabaseData = async function() {
   localStorage.setItem("spms_db_cleared", "true");
   items = [];
   updateUI();
-  showToast("🗑️ Seluruh data pengajuan di database telah BERHASIL DIHAPUS!");
+  showToast("🗑️ Data pengajuan barang di database telah BERHASIL DIHAPUS!");
 
   try {
-    await fetch(SUPABASE_URL + "?id=gt.0", {
+    await fetch(SUPABASE_URL + "?pembelian=not.eq.Pengaduan", {
       method: "DELETE",
       headers: API_HEADERS
     });
   } catch (e) {
-    console.warn("SheetDB delete warning", e);
+    console.warn("Supabase delete warning", e);
   }
 };
 
