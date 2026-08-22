@@ -446,48 +446,48 @@
           </div>
 
           <!-- Cards Row -->
-          <div class="dashboard-cards" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px;">
-            <div class="card" style="background: var(--clr-card); border: 1px solid var(--clr-border); border-radius: 12px; padding: 20px; display: flex; align-items: center; gap: 16px;">
-              <div style="width: 48px; height: 48px; border-radius: 50%; background: #fef2f2; display: flex; align-items: center; justify-content: center; color: #ef4444;">
+          <div class="dashboard-cards">
+            <div class="card card-status-new">
+              <div class="card-icon-wrapper">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 24px; height: 24px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
               </div>
-              <div>
-                <span style="font-size: 13px; color: var(--clr-muted); font-weight: 600;">Pengaduan Baru</span>
-                <h3 id="user-status-count-new" style="font-size: 24px; font-weight: 700; color: var(--clr-text); margin: 4px 0 2px 0;">0</h3>
-                <span style="font-size: 11px; color: #ef4444; font-weight: 600;">Belum ditindaklanjuti</span>
+              <div class="card-details">
+                <span class="card-label">Pengaduan Baru</span>
+                <h3 id="user-status-count-new" class="card-count">0</h3>
+                <span class="card-desc">Belum ditindaklanjuti</span>
               </div>
             </div>
 
-            <div class="card" style="background: var(--clr-card); border: 1px solid var(--clr-border); border-radius: 12px; padding: 20px; display: flex; align-items: center; gap: 16px;">
-              <div style="width: 48px; height: 48px; border-radius: 50%; background: #fff7ed; display: flex; align-items: center; justify-content: center; color: #f97316;">
+            <div class="card card-status-waiting">
+              <div class="card-icon-wrapper">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 24px; height: 24px;"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
               </div>
-              <div>
-                <span style="font-size: 13px; color: var(--clr-muted); font-weight: 600;">Menunggu Perbaikan</span>
-                <h3 id="user-status-count-waiting" style="font-size: 24px; font-weight: 700; color: var(--clr-text); margin: 4px 0 2px 0;">0</h3>
-                <span style="font-size: 11px; color: #f97316; font-weight: 600;">Sedang dijadwalkan</span>
+              <div class="card-details">
+                <span class="card-label">Menunggu Perbaikan</span>
+                <h3 id="user-status-count-waiting" class="card-count">0</h3>
+                <span class="card-desc">Sedang dijadwalkan</span>
               </div>
             </div>
 
-            <div class="card" style="background: var(--clr-card); border: 1px solid var(--clr-border); border-radius: 12px; padding: 20px; display: flex; align-items: center; gap: 16px;">
-              <div style="width: 48px; height: 48px; border-radius: 50%; background: #eff6ff; display: flex; align-items: center; justify-content: center; color: #3b82f6;">
+            <div class="card card-status-process">
+              <div class="card-icon-wrapper">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 24px; height: 24px;"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
               </div>
-              <div>
-                <span style="font-size: 13px; color: var(--clr-muted); font-weight: 600;">Sedang Diperbaiki</span>
-                <h3 id="user-status-count-process" style="font-size: 24px; font-weight: 700; color: var(--clr-text); margin: 4px 0 2px 0;">0</h3>
-                <span style="font-size: 11px; color: #3b82f6; font-weight: 600;">Dalam proses</span>
+              <div class="card-details">
+                <span class="card-label">Sedang Diperbaiki</span>
+                <h3 id="user-status-count-process" class="card-count">0</h3>
+                <span class="card-desc">Dalam proses</span>
               </div>
             </div>
 
-            <div class="card" style="background: var(--clr-card); border: 1px solid var(--clr-border); border-radius: 12px; padding: 20px; display: flex; align-items: center; gap: 16px;">
-              <div style="width: 48px; height: 48px; border-radius: 50%; background: #f0fdf4; display: flex; align-items: center; justify-content: center; color: #22c55e;">
+            <div class="card card-status-done">
+              <div class="card-icon-wrapper">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 24px; height: 24px;"><polyline points="20 6 9 17 4 12"/></svg>
               </div>
-              <div>
-                <span style="font-size: 13px; color: var(--clr-muted); font-weight: 600;">Selesai Diperbaiki</span>
-                <h3 id="user-status-count-done" style="font-size: 24px; font-weight: 700; color: var(--clr-text); margin: 4px 0 2px 0;">0</h3>
-                <span style="font-size: 11px; color: #22c55e; font-weight: 600;">Telah diselesaikan</span>
+              <div class="card-details">
+                <span class="card-label">Selesai Diperbaiki</span>
+                <h3 id="user-status-count-done" class="card-count">0</h3>
+                <span class="card-desc">Telah diselesaikan</span>
               </div>
             </div>
           </div>
@@ -836,6 +836,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=1787290789"></script>
+  <script src="app.js?v=1787362613"></script>
 </body>
 </html>

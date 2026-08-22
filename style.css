@@ -2478,3 +2478,192 @@ body.role-staff .col-aksi {
     grid-template-columns: 1fr !important;
   }
 }
+
+/* =====================================================
+   DASHBOARD CARDS (MODERN iOS-TINTED STATUS CARDS)
+   ===================================================== */
+.dashboard-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.dashboard-cards .card {
+  border-radius: 16px;
+  padding: 18px 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease, border-color 0.2s ease;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.015);
+  border: 1px solid var(--clr-border, #e2e8f0);
+}
+
+.dashboard-cards .card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.04);
+}
+
+.dashboard-cards .card:active {
+  transform: scale(0.97);
+}
+
+.dashboard-cards .card-icon-wrapper {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.dashboard-cards .card-details {
+  display: flex;
+  flex-direction: column;
+}
+
+.dashboard-cards .card-label {
+  font-size: 12.5px;
+  color: var(--clr-muted, #64748b);
+  font-weight: 600;
+}
+
+.dashboard-cards .card-count {
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--clr-text, #0f172a);
+  margin: 2px 0;
+  line-height: 1.1;
+}
+
+.dashboard-cards .card-desc {
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* Card Themes */
+.card-status-new {
+  background: #fef2f2 !important;
+  border-color: #fee2e2 !important;
+}
+.card-status-new .card-icon-wrapper {
+  background: #fee2e2;
+  color: #ef4444;
+}
+.card-status-new .card-desc {
+  color: #ef4444;
+}
+
+.card-status-waiting {
+  background: #fff7ed !important;
+  border-color: #ffedd5 !important;
+}
+.card-status-waiting .card-icon-wrapper {
+  background: #ffedd5;
+  color: #f97316;
+}
+.card-status-waiting .card-desc {
+  color: #f97316;
+}
+
+.card-status-process {
+  background: #eff6ff !important;
+  border-color: #dbeafe !important;
+}
+.card-status-process .card-icon-wrapper {
+  background: #dbeafe;
+  color: #3b82f6;
+}
+.card-status-process .card-desc {
+  color: #3b82f6;
+}
+
+.card-status-done {
+  background: #f0fdf4 !important;
+  border-color: #dcfce7 !important;
+}
+.card-status-done .card-icon-wrapper {
+  background: #dcfce7;
+  color: #22c55e;
+}
+.card-status-done .card-desc {
+  color: #22c55e;
+}
+
+/* =====================================================
+   ADDITIONAL MOBILE & IPHONE OPTIMIZATIONS (UI/UX)
+   ===================================================== */
+@media (max-width: 768px) {
+  .dashboard-cards {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 12px;
+  }
+  .dashboard-cards .card {
+    padding: 14px 16px;
+    border-radius: 14px;
+    gap: 12px;
+  }
+  .dashboard-cards .card-icon-wrapper {
+    width: 40px;
+    height: 40px;
+  }
+  .dashboard-cards .card-icon-wrapper svg {
+    width: 20px !important;
+    height: 20px !important;
+  }
+  .dashboard-cards .card-label {
+    font-size: 11px;
+  }
+  .dashboard-cards .card-count {
+    font-size: 22px;
+  }
+  .dashboard-cards .card-desc {
+    font-size: 10px;
+  }
+
+  /* Sticky blurred iOS-style header */
+  .app-header {
+    background: rgba(255, 255, 255, 0.85) !important;
+    backdrop-filter: blur(12px) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
+    border-bottom: 1px solid rgba(226, 232, 240, 0.8) !important;
+  }
+
+  /* Smooth fade in backdrop */
+  .sidebar-backdrop {
+    display: block !important;
+    visibility: hidden;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.3s;
+  }
+  body.mobile-sidebar-open .sidebar-backdrop {
+    visibility: visible;
+    pointer-events: auto;
+    opacity: 1;
+  }
+}
+
+@media (max-width: 480px) {
+  /* Prevent horizontal scroll issues on very narrow mobile screens */
+  .dashboard-cards {
+    grid-template-columns: 1fr !important;
+  }
+  
+  /* Optimize bottom-nav to fit up to 7 items comfortably */
+  .bottom-nav {
+    gap: 2px !important;
+    padding: 6px 4px calc(8px + env(safe-area-inset-bottom)) !important;
+  }
+  .bottom-nav .nav-item {
+    padding: 4px 2px !important;
+    min-width: 42px !important;
+    font-size: 8.5px !important;
+  }
+  .bottom-nav .nav-item svg {
+    width: 18px !important;
+    height: 18px !important;
+  }
+}
