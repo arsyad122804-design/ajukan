@@ -770,7 +770,10 @@ function renderAdminHistoryTable() {
   const tbody = document.getElementById("admin-history-table-body");
   const empty = document.getElementById("admin-history-empty-state");
   if (!tbody) return;
-  const filtered = items.filter(i => i.approval === "Disetujui" || i.approval === "Disetujui Direktur" || i.pembelian === "Sudah Dibeli");
+  const filtered = items.filter(i => 
+    i.pembelian === "Sudah Dibeli" || 
+    (i.approval && i.approval !== "Pending")
+  );
   if (filtered.length === 0) { tbody.innerHTML = ""; if (empty) empty.style.display = "flex"; return; }
   if (empty) empty.style.display = "none";
   tbody.innerHTML = filtered.map((i, idx) => `
@@ -2084,11 +2087,11 @@ window.addEventListener("DOMContentLoaded", () => {
 
       // Direktur & Manager specific: Show Dashboard, Approval, Reports & Profile
       if (session.role === 'direktur' || session.role === 'manager') {
-        ['nav-admin-history', 'nav-admin-purchases'].forEach(id => {
+        ['nav-admin-purchases'].forEach(id => {
           const el = document.getElementById(id);
           if (el) el.style.display = 'none';
         });
-        ['admin-history', 'admin-purchases'].forEach(tab => {
+        ['admin-purchases'].forEach(tab => {
           const el = document.querySelector(`.bottom-nav .nav-item[data-tab="${tab}"]`);
           if (el) el.style.display = 'none';
         });
