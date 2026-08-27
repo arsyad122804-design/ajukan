@@ -407,16 +407,15 @@ async function fetchItems() {
   const oldT = t && !t.textContent.includes("Mengambil") ? t.textContent : "Beranda";
   if (t) t.textContent = "Mengambil data...";
 
-  // Fetch registered users first
-  try {
-    const userRes = await fetch(AUTH_API_URL);
-    const userData = await userRes.json();
-    if (Array.isArray(userData)) {
-      registeredUsers = userData;
-    }
-  } catch (err) {
-    console.warn("Gagal mengambil data user dari SheetDB:", err);
-  }
+  // Fetch registered users in background (non-blocking)
+  fetch(AUTH_API_URL)
+    .then(res => res.json())
+    .then(data => {
+      if (Array.isArray(data)) {
+        registeredUsers = data;
+      }
+    })
+    .catch(err => console.warn("Gagal mengambil data user dari SheetDB:", err));
 
   // Selalu ikut database — bersihkan cache lokal dulu
   localStorage.removeItem("spms_items");
