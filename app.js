@@ -626,8 +626,7 @@ const btnCancelModal    = document.getElementById("btn-cancel-modal");
 // FORM VALIDATION HANDLER (For Electron Silent Fails)
 // =====================================================
 document.addEventListener('invalid', function(e) {
-  e.preventDefault();
-  alert("Harap isi/lengkapi kolom yang masih kosong!");
+  showToast("⚠️ Harap lengkapi semua kolom yang wajib diisi!");
   e.target.focus();
 }, true);
 
@@ -1043,7 +1042,7 @@ if (formRegisterItem) {
     // Validasi tanda tangan
     const canvas = document.getElementById("signature-canvas");
     if (canvas && isCanvasBlank(canvas)) {
-      alert("Harap isi kotak Tanda Tangan terlebih dahulu sebelum mendaftar!");
+      showToast("⚠️ Harap isi kotak Tanda Tangan terlebih dahulu!");
       return;
     }
 
