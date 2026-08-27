@@ -55,34 +55,7 @@ const EMAILJS_TEMPLATE_ID = "template_8sayivm";
 const EMAILJS_PUBLIC_KEY = "9H40FE5EGmMPhnZle";
 
 function getRoleEmail(targetRole) {
-  try {
-    const roleClean = (targetRole || "").toLowerCase().trim();
-    if (!roleClean) return "";
-    
-    // 1. Check shared database profiles from Supabase (shared across all devices)
-    if (dbProfiles && dbProfiles.length > 0) {
-      const matchDbProf = dbProfiles.find(p => p.pengaju === roleClean && p.wa_pengaju && p.wa_pengaju.includes("@"));
-      if (matchDbProf) return matchDbProf.wa_pengaju.trim();
-    }
-    
-    // 2. Check local storage profile overrides
-    const keysToTry = [
-      "spms_profile_" + roleClean,
-      "spms_profile_" + (roleClean === "direktur" ? "hibatullah" : roleClean === "manager" ? "manager" : roleClean === "admin" ? "admin" : roleClean)
-    ];
-    for (const key of keysToTry) {
-      const data = JSON.parse(localStorage.getItem(key) || "{}");
-      if (data && data.email) return data.email;
-    }
-
-    // 3. Check SheetDB registered users dynamically
-    if (registeredUsers && registeredUsers.length > 0) {
-      const matchUser = registeredUsers.find(u => u.role === roleClean && u.username && u.username.includes("@"));
-      if (matchUser) return matchUser.username;
-    }
-  } catch (e) {}
-  
-  // 4. Fallback default email if not registered/loaded yet
+  // Langsung diarahkan ke email Anda sesuai alur untuk semua peran manajemen (Admin, Manager, Direktur)
   return "fikriarsyad20041928@gmail.com";
 }
 
