@@ -13,6 +13,8 @@ const API_HEADERS = {
 let items = [];
 let currentApprovalId = null;
 let currentApprovalAction = null;
+const AUTH_API_URL = "https://sheetdb.io/api/v1/2hbuzs32m6bvw";
+let registeredUsers = [];
 
 function getUserProfileKey() {
   try {
@@ -53,26 +55,28 @@ const EMAILJS_PUBLIC_KEY = "9H40FE5EGmMPhnZle";
 
 function getRoleEmail(targetRole) {
   try {
-    const roleClean = (targetRole || "").toLowerCase().replace(/[^a-z0-9]/g, "_");
+    const roleClean = (targetRole || "").toLowerCase().trim();
     if (!roleClean) return "";
     
-    // Exact profile keys to try
+    // 1. Check local storage profile overrides
     const keysToTry = [
       "spms_profile_" + roleClean,
       "spms_profile_" + (roleClean === "direktur" ? "hibatullah" : roleClean === "manager" ? "manager" : roleClean === "admin" ? "admin" : roleClean)
     ];
-
     for (const key of keysToTry) {
       const data = JSON.parse(localStorage.getItem(key) || "{}");
       if (data && data.email) return data.email;
     }
+
+    // 2. Check SheetDB registered users dynamically
+    if (registeredUsers && registeredUsers.length > 0) {
+      const matchUser = registeredUsers.find(u => u.role === roleClean && u.username && u.username.includes("@"));
+      if (matchUser) return matchUser.username;
+    }
   } catch (e) {}
   
-  // Fallback default emails if not configured in profile yet
-  if (targetRole === "admin") return "fikriarsyad20041928@gmail.com";
-  if (targetRole === "direktur") return "fikriarsyad20041928@gmail.com";
-  if (targetRole === "manager") return "fikriarsyad20041928@gmail.com";
-  return "";
+  // 3. Fallback default email if not registered/loaded yet
+  return "pesantrenhibatullah@gmail.com";
 }
 
 async function sendEmailDirect(toEmail, subject, message, extraParams = {}, customTemplateId = null) {
@@ -402,6 +406,17 @@ async function fetchItems() {
   const t = document.getElementById("header-page-title");
   const oldT = t && !t.textContent.includes("Mengambil") ? t.textContent : "Beranda";
   if (t) t.textContent = "Mengambil data...";
+
+  // Fetch registered users first
+  try {
+    const userRes = await fetch(AUTH_API_URL);
+    const userData = await userRes.json();
+    if (Array.isArray(userData)) {
+      registeredUsers = userData;
+    }
+  } catch (err) {
+    console.warn("Gagal mengambil data user dari SheetDB:", err);
+  }
 
   // Selalu ikut database — bersihkan cache lokal dulu
   localStorage.removeItem("spms_items");
