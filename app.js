@@ -47,9 +47,9 @@ function saveLocalOverrides(id, approval, adminSignature, pembelian) {
 const FONNTE_TOKEN = "Gp6kkhv5BtzLh49iw45o";
 
 // ---- EmailJS Configuration (Metode 1) ----
-const EMAILJS_SERVICE_ID = "service_pj21c0q";
-const EMAILJS_TEMPLATE_ID = "template_7kd56f8";
-const EMAILJS_PUBLIC_KEY = "CInhHaoRzugLo_XSi";
+const EMAILJS_SERVICE_ID = "service_ld2cr0x";
+const EMAILJS_TEMPLATE_ID = "template_8sayivm";
+const EMAILJS_PUBLIC_KEY = "9H40FE5EGmMPhnZle";
 
 function getRoleEmail(targetRole) {
   try {
@@ -3330,7 +3330,7 @@ window.updateComplaintStatus = async function(id, newStatus) {
             item_pengaju: comp.pengaju || "Pengguna"
           };
           
-          sendEmailDirect(comp.email_pengaju, userSubject, userMsg, userParams, "template_x98qa5v");
+          sendEmailDirect(comp.email_pengaju, userSubject, userMsg, userParams, "template_yrrkpf7");
         }
       }
       renderComplaints();
@@ -3437,7 +3437,7 @@ Jazakumullahu khairan.`;
         item_pengaju: reporterName
       };
 
-      await sendEmailDirect(adminEmail, `[Pengaduan Baru] ${subject}`, emailMessage, extraParams, "template_x98qa5v");
+      await sendEmailDirect(adminEmail, `[Pengaduan Baru] ${subject}`, emailMessage, extraParams, "template_yrrkpf7");
       
       // Kirim email konfirmasi ke pelapor
       if (reporterEmail && reporterEmail.includes("@")) {
@@ -3451,7 +3451,7 @@ Jazakumullahu khairan.`;
           item_pengaju: reporterName
         };
         
-        sendEmailDirect(reporterEmail, userSubject, userMsg, userParams, "template_x98qa5v");
+        sendEmailDirect(reporterEmail, userSubject, userMsg, userParams, "template_yrrkpf7");
       }
       
       showToast("✅ Laporan pengaduan Anda berhasil terkirim ke Admin!");
