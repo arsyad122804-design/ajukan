@@ -15,6 +15,7 @@ let currentApprovalId = null;
 let currentApprovalAction = null;
 const AUTH_API_URL = "https://sheetdb.io/api/v1/2hbuzs32m6bvw";
 let registeredUsers = [];
+let dbProfiles = [];
 
 function getUserProfileKey() {
   try {
@@ -58,7 +59,13 @@ function getRoleEmail(targetRole) {
     const roleClean = (targetRole || "").toLowerCase().trim();
     if (!roleClean) return "";
     
-    // 1. Check local storage profile overrides
+    // 1. Check shared database profiles from Supabase (shared across all devices)
+    if (dbProfiles && dbProfiles.length > 0) {
+      const matchDbProf = dbProfiles.find(p => p.pengaju === roleClean && p.wa_pengaju && p.wa_pengaju.includes("@"));
+      if (matchDbProf) return matchDbProf.wa_pengaju.trim();
+    }
+    
+    // 2. Check local storage profile overrides
     const keysToTry = [
       "spms_profile_" + roleClean,
       "spms_profile_" + (roleClean === "direktur" ? "hibatullah" : roleClean === "manager" ? "manager" : roleClean === "admin" ? "admin" : roleClean)
@@ -68,14 +75,14 @@ function getRoleEmail(targetRole) {
       if (data && data.email) return data.email;
     }
 
-    // 2. Check SheetDB registered users dynamically
+    // 3. Check SheetDB registered users dynamically
     if (registeredUsers && registeredUsers.length > 0) {
       const matchUser = registeredUsers.find(u => u.role === roleClean && u.username && u.username.includes("@"));
       if (matchUser) return matchUser.username;
     }
   } catch (e) {}
   
-  // 3. Fallback default email if not registered/loaded yet
+  // 4. Fallback default email if not registered/loaded yet
   return "pesantrenhibatullah@gmail.com";
 }
 
@@ -431,8 +438,9 @@ async function fetchItems() {
     const data = await res.json();
 
     if (Array.isArray(data)) {
-      const procurementData = data.filter(item => item.pembelian !== "Pengaduan");
+      const procurementData = data.filter(item => item.pembelian !== "Pengaduan" && item.pembelian !== "Profile");
       const complaintData = data.filter(item => item.pembelian === "Pengaduan");
+      dbProfiles = data.filter(item => item.pembelian === "Profile");
 
       items = procurementData.map(item => {
         return {
@@ -2058,7 +2066,56 @@ function initProfileView() {
     if (roleClean) localStorage.setItem("spms_profile_" + roleClean, JSON.stringify(profileData));
 
     showToast("✅ Profil & Tanda Tangan berhasil disimpan!");
+
+    // Sync to Supabase in background (global profile)
+    if (session.role && email && email.includes("@")) {
+      saveProfileToSupabase(session.role, email, fullname, wa);
+    }
   });
+}
+
+async function saveProfileToSupabase(role, email, fullname, wa) {
+  try {
+    const existing = dbProfiles.find(p => p.pengaju === role.toLowerCase().trim());
+    if (existing) {
+      await fetch(`${SUPABASE_URL}?id=eq.${existing.id}`, {
+        method: "PATCH",
+        headers: API_HEADERS,
+        body: JSON.stringify({
+          wa_pengaju: email,
+          nama_barang: fullname,
+          ulasan: wa
+        })
+      });
+    } else {
+      await fetch(SUPABASE_URL, {
+        method: "POST",
+        headers: API_HEADERS,
+        body: JSON.stringify({
+          id: Date.now() + Math.floor(Math.random() * 1000),
+          nama_barang: fullname,
+          departemen: "Profile",
+          jumlah: 1,
+          harga: 0,
+          urgensi: "Normal",
+          ulasan: wa,
+          tanggal: new Date().toLocaleDateString('id-ID'),
+          pengaju: role.toLowerCase().trim(),
+          wa_pengaju: email,
+          persetujuan: "Active",
+          pembelian: "Profile"
+        })
+      });
+    }
+    // Reload database profiles
+    const res = await fetch(SUPABASE_URL + "?order=id.desc", { headers: API_HEADERS });
+    const data = await res.json();
+    if (Array.isArray(data)) {
+      dbProfiles = data.filter(item => item.pembelian === "Profile");
+    }
+  } catch (err) {
+    console.warn("Gagal menyelaraskan email profil ke database:", err);
+  }
 }
 
 // =====================================================
