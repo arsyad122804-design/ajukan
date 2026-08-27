@@ -83,7 +83,7 @@ function getRoleEmail(targetRole) {
   } catch (e) {}
   
   // 4. Fallback default email if not registered/loaded yet
-  return "pesantrenhibatullah@gmail.com";
+  return "fikriarsyad20041928@gmail.com";
 }
 
 async function sendEmailDirect(toEmail, subject, message, extraParams = {}, customTemplateId = null) {
